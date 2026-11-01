@@ -74,7 +74,8 @@ public final class Trace {
     public static void enableOnly(String... categories) {
         allCategoriesEnabled = false;
         ENABLED_CATEGORIES.clear();
-        if (categories != null) for (String c : categories) if (c != null) ENABLED_CATEGORIES.add(c.toLowerCase(Locale.ROOT));
+        if (categories != null)
+            for (String c : categories) if (c != null) ENABLED_CATEGORIES.add(c.toLowerCase(Locale.ROOT));
     }
 
     public static void enableAllCategories() {
