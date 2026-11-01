@@ -4,6 +4,7 @@ import chirp.console.Input;
 import chirp.console.Messenger;
 import chirp.internal.Trace;
 
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -65,7 +66,7 @@ public final class BooleanReader {
         if (helpText != null) System.out.println(helpText);
 
         while (true) {
-            String raw = Input.readRaw(label + " (y/n)").toLowerCase();
+            String raw = Input.readRaw(label + " (y/n)").toLowerCase(Locale.ROOT);
             Trace.value("reader", "raw input", raw);
 
             if (raw.isEmpty() && defaultValue != null) {

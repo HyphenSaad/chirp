@@ -1,5 +1,7 @@
 package chirp.http;
 
+import java.util.Locale;
+
 /**
  * HTTP verbs — every value supports IDE autocomplete.
  *
@@ -12,7 +14,7 @@ public enum HttpMethod {
     public static HttpMethod parse(String value) {
         if (value == null) return GET;
         try {
-            return HttpMethod.valueOf(value.trim().toUpperCase());
+            return HttpMethod.valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return GET;
         }

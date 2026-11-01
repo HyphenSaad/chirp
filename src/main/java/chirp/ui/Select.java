@@ -3,6 +3,7 @@ package chirp.ui;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Consumer;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -85,13 +86,14 @@ public class Select extends javafx.scene.control.ComboBox<String> {
         getEditor().textProperty().addListener((obs, oldV, newV) -> {
             if (filtering) return;
             String query = newV == null ? "" : newV;
+            String lowerQuery = query.toLowerCase(Locale.ROOT);
 
             filtering = true;
             try {
-                filteredItems.setPredicate(item -> query.isBlank()
-                        || (item != null && item.toLowerCase().contains(query.toLowerCase())));
+                filteredItems.setPredicate(item -> lowerQuery.isBlank()
+                        || (item != null && item.toLowerCase(Locale.ROOT).contains(lowerQuery)));
 
-                if (!isShowing() && !query.isBlank()) {
+                if (!isShowing() && !lowerQuery.isBlank()) {
                     show();
                 }
             } finally {

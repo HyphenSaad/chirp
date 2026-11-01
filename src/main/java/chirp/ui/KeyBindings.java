@@ -1,6 +1,7 @@
 package chirp.ui;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import javafx.scene.Node;
 import javafx.scene.Scene;
@@ -91,25 +92,19 @@ public final class KeyBindings {
     /** Applies every registered binding to the given scene. */
     public void applyTo(Scene scene) {
         if (scene == null) return;
-        int i = 0;
         for (Map.Entry<KeyCombination, Runnable> e : bindings.entrySet()) {
             scene.getAccelerators().put(e.getKey(), safe(e.getValue()));
-            i++;
         }
     }
 
     /** Applies every registered binding to the given node (limited to its focus scope). */
     public void applyTo(Node node) {
         if (node == null) return;
-        int i = 0;
+        Scene scene = node.getScene();
+        if (scene == null) return;
+        // Use scene-level accelerators — the most reliable mechanism
         for (Map.Entry<KeyCombination, Runnable> e : bindings.entrySet()) {
-            String id = "chirp-binding-" + (i++);
-            node.getAccessibleRole();
-            Scene scene = node.getScene();
-            if (scene != null) {
-                // Use scene-level accelerators — the most reliable mechanism
-                scene.getAccelerators().put(e.getKey(), safe(e.getValue()));
-            }
+            scene.getAccelerators().put(e.getKey(), safe(e.getValue()));
         }
     }
 
@@ -117,7 +112,7 @@ public final class KeyBindings {
         return () -> {
             try {
                 r.run();
-            } catch (Throwable ignored) {}
+            } catch (RuntimeException ignored) {}
         };
     }
 
@@ -129,7 +124,7 @@ public final class KeyBindings {
         boolean ctrl = false, shift = false, alt = false, meta = false;
         KeyCode key = null;
         for (String t : tokens) {
-            String lower = t.toLowerCase();
+            String lower = t.toLowerCase(Locale.ROOT);
             switch (lower) {
                 case "ctrl", "control" -> ctrl = true;
                 case "shift" -> shift = true;
@@ -152,9 +147,9 @@ public final class KeyBindings {
         String t = token.trim();
         if (t.isEmpty()) return null;
         try {
-            return KeyCode.valueOf(t.toUpperCase());
+            return KeyCode.valueOf(t.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ignored) {}
-        switch (t.toLowerCase()) {
+        switch (t.toLowerCase(Locale.ROOT)) {
             case "esc", "escape" :
                 return KeyCode.ESCAPE;
             case "enter", "return" :

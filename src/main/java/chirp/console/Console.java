@@ -10,6 +10,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Console printing, semantic messages, tables, progress bars, and separators.
@@ -298,7 +299,7 @@ public final class Console {
             System.out.flush();
             return;
         }
-        String os = System.getProperty("os.name", "").toLowerCase();
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         try {
             ProcessBuilder builder;
             if (os.contains("win")) builder = new ProcessBuilder("cmd", "/c", "cls");

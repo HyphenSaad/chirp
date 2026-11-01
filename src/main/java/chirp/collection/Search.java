@@ -4,6 +4,7 @@ import chirp.internal.Trace;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
@@ -20,6 +21,11 @@ import java.util.regex.Pattern;
  * <h2>Key-value</h2>
  * <p>{@link Key} enum drives the composite checks: {@code
  * Search.matches(text, query, Key.CASE_SENSITIVE, false, Key.WHOLE_WORD, true)}.</p>
+ *
+ * <h2>Locale</h2>
+ * <p>Every case-insensitive comparison uses {@link Locale#ROOT} so that
+ * Turkish-locale machines (where {@code "I".toLowerCase()} is the dotless
+ * {@code "ı"}) get the same results as any other locale.</p>
  */
 public final class Search {
 
@@ -47,7 +53,7 @@ public final class Search {
 
     public static boolean contains(String text, String query) {
         if (text == null || query == null) return false;
-        return text.toLowerCase().contains(query.toLowerCase());
+        return text.toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT));
     }
     public static boolean containsIgnoreCase(String text, String query) { return contains(text, query); }
     public static boolean looseContains(String text, String query) { return contains(text, query); }
@@ -75,7 +81,7 @@ public final class Search {
 
     public static boolean startsWith(String text, String prefix) {
         if (text == null || prefix == null) return false;
-        return text.toLowerCase().startsWith(prefix.toLowerCase());
+        return text.toLowerCase(Locale.ROOT).startsWith(prefix.toLowerCase(Locale.ROOT));
     }
     public static boolean beginsWith(String text, String prefix) { return startsWith(text, prefix); }
     public static boolean prefix(String text, String prefix) { return startsWith(text, prefix); }
@@ -87,7 +93,7 @@ public final class Search {
 
     public static boolean endsWith(String text, String suffix) {
         if (text == null || suffix == null) return false;
-        return text.toLowerCase().endsWith(suffix.toLowerCase());
+        return text.toLowerCase(Locale.ROOT).endsWith(suffix.toLowerCase(Locale.ROOT));
     }
     public static boolean suffix(String text, String suffix) { return endsWith(text, suffix); }
 
@@ -129,7 +135,7 @@ public final class Search {
             int flags = caseSensitive ? 0 : Pattern.CASE_INSENSITIVE;
             String pattern = "(?<!\\w)" + Pattern.quote(word) + "(?!\\w)";
             return Pattern.compile(pattern, flags).matcher(text).find();
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             Trace.warn("search", "wholeWord failed: " + e.getMessage());
             return false;
         }
@@ -139,7 +145,7 @@ public final class Search {
 
     public static boolean fuzzy(String text, String query, int maxDistance) {
         if (text == null || query == null || maxDistance < 0) return false;
-        return levenshtein(text.toLowerCase(), query.toLowerCase()) <= maxDistance;
+        return levenshtein(text.toLowerCase(Locale.ROOT), query.toLowerCase(Locale.ROOT)) <= maxDistance;
     }
     public static boolean fuzzyMatch(String text, String query, int maxDistance) {
         return fuzzy(text, query, maxDistance);

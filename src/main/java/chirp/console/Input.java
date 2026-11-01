@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Locale;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 
@@ -49,6 +50,9 @@ import java.util.Scanner;
  * are decoded as UTF-8 explicitly. Relying on the platform default charset
  * would silently mis-decode non-ASCII prompts and answers on Windows
  * consoles whose codepage is not UTF-8.</p>
+ *
+ * <p><b>Locale:</b> case-insensitive y/n parsing uses {@link Locale#ROOT} so
+ * Turkish-locale machines treat {@code "Y"} the same as everywhere else.</p>
  */
 public final class Input {
 
@@ -273,7 +277,7 @@ public final class Input {
     public static boolean readYesNo(String prompt) {
         ChirpLifecycle.requireStarted();
         while (true) {
-            String value = readRaw(prompt + " (y/n)").toLowerCase();
+            String value = readRaw(prompt + " (y/n)").toLowerCase(Locale.ROOT);
             if (value.equals("y") || value.equals("yes")) return true;
             if (value.equals("n") || value.equals("no")) return false;
             Messenger.error("Please type y or n.");

@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Minimal but correct SMTP client — supports SMTPS (port 465), STARTTLS
@@ -60,7 +61,8 @@ final class SmtpClient {
             List<String> ehlo = expect(in, 250);
 
             if (starttls) {
-                boolean supportsTls = ehlo.stream().anyMatch(l -> l.toUpperCase().contains("STARTTLS"));
+                boolean supportsTls = ehlo.stream()
+                        .anyMatch(l -> l.toUpperCase(Locale.ROOT).contains("STARTTLS"));
                 if (!supportsTls) throw new IOException("Server does not advertise STARTTLS");
                 command(out, "STARTTLS");
                 expect(in, 220);
@@ -92,9 +94,13 @@ final class SmtpClient {
             command(out, "QUIT");
             // 221 usually, but be lenient
         } finally {
-            if (socket != null) try {
-                socket.close();
-            } catch (IOException ignored) {}
+            if (socket != null) {
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                    if (log != null) log.add("C: socket close failed: " + e.getMessage());
+                }
+            }
         }
     }
 
@@ -120,7 +126,7 @@ final class SmtpClient {
     }
 
     private void command(PrintWriter out, String line) {
-        log(out, "C: " + line);
+        log("C: " + line);
         out.print(line + "\r\n");
         out.flush();
     }
@@ -146,7 +152,7 @@ final class SmtpClient {
         List<String> lines = new ArrayList<>();
         String line;
         while ((line = in.readLine()) != null) {
-            log(in, "S: " + line);
+            log("S: " + line);
             lines.add(line);
             if (line.length() >= 4 && line.charAt(3) == ' ') break;
             if (line.length() < 4) break;
@@ -180,18 +186,17 @@ final class SmtpClient {
         out.flush();
     }
 
-    private void log(PrintWriter out, String line) {
+    private void log(String line) {
         if (log != null) log.add(line);
-        if (listener != null) try {
-            listener.onSmtpEvent(line);
-        } catch (Exception ignored) {}
-    }
-
-    private void log(BufferedReader in, String line) {
-        if (log != null) log.add(line);
-        if (listener != null) try {
-            listener.onSmtpEvent(line);
-        } catch (Exception ignored) {}
+        if (listener != null) {
+            try {
+                listener.onSmtpEvent(line);
+            } catch (RuntimeException e) {
+                // Listener is best-effort — record the failure in the SMTP log
+                // so it does not vanish silently, but never break the send.
+                if (log != null) log.add("! listener threw on onSmtpEvent: " + e.getMessage());
+            }
+        }
     }
 
     // ---------------------------------------------------- sockets
@@ -209,7 +214,7 @@ final class SmtpClient {
     private static String localHostname() {
         try {
             return InetAddress.getLocalHost().getHostName();
-        } catch (Exception e) {
+        } catch (IOException e) {
             return "localhost";
         }
     }

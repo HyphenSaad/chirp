@@ -2,6 +2,7 @@ package chirp.ui;
 
 import java.awt.Desktop;
 import java.net.URI;
+import java.util.Locale;
 
 /**
  * Clickable link that opens URLs in the system browser.
@@ -46,13 +47,13 @@ public class Hyperlink extends javafx.scene.control.Hyperlink {
                 return;
             }
             // Fallback — OS-specific launchers
-            String os = System.getProperty("os.name", "").toLowerCase();
+            String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
             ProcessBuilder pb;
             if (os.contains("win")) pb = new ProcessBuilder("rundll32", "url.dll,FileProtocolHandler", url);
             else if (os.contains("mac")) pb = new ProcessBuilder("open", url);
             else pb = new ProcessBuilder("xdg-open", url);
             pb.start();
-        } catch (Exception ignored) {
+        } catch (java.io.IOException | RuntimeException ignored) {
             // Silent — the caller can still show a message if needed.
         }
     }
