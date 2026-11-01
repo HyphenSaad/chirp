@@ -7,6 +7,7 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-blue)](CHANGELOG.md)
 [![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/hyphensaad/chirp/actions)
 [![JavaFX](https://img.shields.io/badge/JavaFX-21-purple)](https://openjfx.io/)
+[![Docs](https://img.shields.io/badge/docs-live-brightgreen)](https://hyphensaad.github.io/chirp/)
 
 Chirp is a zero-boilerplate Java toolkit that replaces the friction of standard Java I/O, arrays, validation, date/time, networking, email, and desktop UI with **fluent, safe, one-line** APIs.
 
@@ -576,14 +577,19 @@ See [QUICKSTART.md](docs/QUICKSTART.md) for a complete guide.
 
 ## Documentation
 
-- 🚀 [Quick Start](docs/QUICKSTART.md) — 5-minute tour
-- 📦 [Installation](docs/INSTALLATION.md) — detailed setup per platform
-- 📚 [API Reference](docs/API_REFERENCE.md) — comprehensive reference for every class
-- 💡 [Examples](docs/EXAMPLES.md) — before/after comparisons for every feature
-- 🏗️ [Architecture](docs/ARCHITECTURE.md) — how Chirp is designed
-- 🎨 [JavaFX UI Guide](docs/JAVAFX_GUIDE.md) — the full component catalog
-- ❓ [FAQ](docs/FAQ.md) — common questions
-- 🔧 [Troubleshooting](docs/TROUBLESHOOTING.md) — when things go wrong
+**📖 [Read the full documentation →](https://hyphensaad.github.io/chirp/)**
+
+Or jump straight to a section:
+
+- 🚀 [Quick Start](https://hyphensaad.github.io/chirp/QUICKSTART.html) — 5-minute tour
+- 📦 [Installation](https://hyphensaad.github.io/chirp/INSTALLATION.html) — detailed setup per platform
+- 📚 [API Reference](https://hyphensaad.github.io/chirp/API_REFERENCE.html) — every class and method
+- 💡 [Examples](https://hyphensaad.github.io/chirp/EXAMPLES.html) — before/after comparisons
+- 🏗️ [Architecture](https://hyphensaad.github.io/chirp/ARCHITECTURE.html) — how Chirp is designed
+- 🎨 [JavaFX UI Guide](https://hyphensaad.github.io/chirp/JAVAFX_GUIDE.html) — full component catalog
+- ❓ [FAQ](https://hyphensaad.github.io/chirp/FAQ.html) — common questions
+- 🔧 [Troubleshooting](https://hyphensaad.github.io/chirp/TROUBLESHOOTING.html)
+- 📖 [Full Javadoc](https://hyphensaad.github.io/chirp/javadoc/) — auto-generated class reference
 
 ---
 
