@@ -18,6 +18,7 @@ import chirp.stats.Stats;
 import chirp.text.Check;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -43,17 +44,22 @@ import java.util.Scanner;
  * <p>Every read is guarded by {@link ChirpLifecycle#requireStarted()}.
  * {@link #readRaw(String)} is the low-level primitive used internally —
  * no guard, no warnings.</p>
+ *
+ * <p><b>Encoding:</b> {@code System.in} and any custom {@link InputStream}
+ * are decoded as UTF-8 explicitly. Relying on the platform default charset
+ * would silently mis-decode non-ASCII prompts and answers on Windows
+ * consoles whose codepage is not UTF-8.</p>
  */
 public final class Input {
 
-    private static Scanner SCANNER = new Scanner(System.in);
+    private static Scanner SCANNER = new Scanner(System.in, StandardCharsets.UTF_8);
 
     private Input() {}
 
     // ============================================================== test hooks
 
-    public static void setInputStream(InputStream in) { SCANNER = new Scanner(in); }
-    public static void resetInputStream() { SCANNER = new Scanner(System.in); }
+    public static void setInputStream(InputStream in) { SCANNER = new Scanner(in, StandardCharsets.UTF_8); }
+    public static void resetInputStream() { SCANNER = new Scanner(System.in, StandardCharsets.UTF_8); }
 
     static String nextLine() {
         try {
