@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  Chirp code style: Eclipse JDT formatter profile.
+
+  Used by both the Maven build (Spotless: `mvn spotless:apply` formats,
+  `mvn verify` checks) and VS Code (`java.format.settings.url` in
+  .vscode/settings.json), so "Format Document" matches the build check.
+
+  Anything not listed falls back to the Eclipse built-in profile. Deliberate
+  choices: 4-space indent, 120 columns, one-line method/lambda/block bodies
+  are preserved (the alias-style API), manual line wrapping is preserved,
+  comments are left as written, and switch cases are indented.
+-->
+<profiles version="23">
+<profile kind="CodeFormatterProfile" name="Chirp" version="23">
+<!-- language level used to parse sources -->
+<setting id="org.eclipse.jdt.core.compiler.source" value="17"/>
+<setting id="org.eclipse.jdt.core.compiler.compliance" value="17"/>
+<setting id="org.eclipse.jdt.core.compiler.codegen.targetPlatform" value="17"/>
+
+<!-- indentation -->
+<setting id="org.eclipse.jdt.core.formatter.tabulation.char" value="space"/>
+<setting id="org.eclipse.jdt.core.formatter.tabulation.size" value="4"/>
+<setting id="org.eclipse.jdt.core.formatter.indentation.size" value="4"/>
+<setting id="org.eclipse.jdt.core.formatter.continuation_indentation" value="2"/>
+<setting id="org.eclipse.jdt.core.formatter.continuation_indentation_for_array_initializer" value="2"/>
+<setting id="org.eclipse.jdt.core.formatter.indent_switchstatements_compare_to_switch" value="true"/>
+<setting id="org.eclipse.jdt.core.formatter.indent_switchstatements_compare_to_cases" value="true"/>
+<setting id="org.eclipse.jdt.core.formatter.indent_breaks_compare_to_cases" value="true"/>
+<setting id="org.eclipse.jdt.core.formatter.indent_empty_lines" value="false"/>
+
+<!-- line length and wrapping -->
+<setting id="org.eclipse.jdt.core.formatter.lineSplit" value="120"/>
+<setting id="org.eclipse.jdt.core.formatter.comment.line_length" value="120"/>
+<setting id="org.eclipse.jdt.core.formatter.join_wrapped_lines" value="false"/>
+<setting id="org.eclipse.jdt.core.formatter.wrap_before_binary_operator" value="true"/>
+<setting id="org.eclipse.jdt.core.formatter.wrap_outer_expressions_when_nested" value="true"/>
+<!-- enum constants: wrap where necessary (default keeps them on one unbounded line) -->
+<setting id="org.eclipse.jdt.core.formatter.alignment_for_enum_constants" value="16"/>
+
+<!-- keep compact one-liners (alias methods, small lambdas, guard clauses) -->
+<setting id="org.eclipse.jdt.core.formatter.keep_method_body_on_one_line" value="one_line_preserve"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_lambda_body_block_on_one_line" value="one_line_preserve"/>
+<!-- "other braced code" (try/catch, initializers): one_line_preserve makes the
+     Eclipse version bundled with Spotless 3.10 throw on every file, so only
+     empty blocks stay on one line -->
+<setting id="org.eclipse.jdt.core.formatter.keep_code_block_on_one_line" value="one_line_if_empty"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_if_then_body_block_on_one_line" value="one_line_preserve"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_loop_body_block_on_one_line" value="one_line_preserve"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_type_declaration_on_one_line" value="one_line_preserve"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_anonymous_type_declaration_on_one_line" value="one_line_preserve"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_enum_declaration_on_one_line" value="one_line_preserve"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_enum_constant_declaration_on_one_line" value="one_line_preserve"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_record_declaration_on_one_line" value="one_line_preserve"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_record_constructor_on_one_line" value="one_line_preserve"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_annotation_declaration_on_one_line" value="one_line_preserve"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_simple_if_on_one_line" value="true"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_then_statement_on_same_line" value="true"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_else_statement_on_same_line" value="true"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_guardian_clause_on_one_line" value="true"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_simple_for_body_on_same_line" value="true"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_simple_while_body_on_same_line" value="true"/>
+<setting id="org.eclipse.jdt.core.formatter.keep_simple_do_while_body_on_same_line" value="true"/>
+<setting id="org.eclipse.jdt.core.formatter.compact_else_if" value="true"/>
+
+<!-- blank lines -->
+<setting id="org.eclipse.jdt.core.formatter.number_of_empty_lines_to_preserve" value="1"/>
+<setting id="org.eclipse.jdt.core.formatter.blank_lines_at_end_of_method_body" value="0"/>
+<setting id="org.eclipse.jdt.core.formatter.blank_lines_at_beginning_of_method_body" value="0"/>
+
+<!-- comments are left exactly as written -->
+<setting id="org.eclipse.jdt.core.formatter.comment.format_javadoc_comments" value="false"/>
+<setting id="org.eclipse.jdt.core.formatter.comment.format_block_comments" value="false"/>
+<setting id="org.eclipse.jdt.core.formatter.comment.format_line_comments" value="false"/>
+<setting id="org.eclipse.jdt.core.formatter.comment.format_header" value="false"/>
+<setting id="org.eclipse.jdt.core.formatter.join_lines_in_comments" value="false"/>
+<setting id="org.eclipse.jdt.core.formatter.comment.preserve_white_space_between_code_and_line_comments" value="true"/>
+
+<!-- opt-out escape hatch: // @formatter:off ... // @formatter:on -->
+<setting id="org.eclipse.jdt.core.formatter.use_on_off_tags" value="true"/>
+<setting id="org.eclipse.jdt.core.formatter.disabling_tag" value="@formatter:off"/>
+<setting id="org.eclipse.jdt.core.formatter.enabling_tag" value="@formatter:on"/>
+</profile>
+</profiles>

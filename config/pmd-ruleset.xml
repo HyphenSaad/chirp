@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PMD rules for Chirp: defects, robustness, security and performance pitfalls.
+
+  Style and design-opinion categories are deliberately left out: the library's
+  alias-style API (2-4 names per method, fluent builders whose fields match
+  their setter names) would drown real findings in noise. Formatting is
+  enforced separately by Spotless.
+
+  Exclusions below are either style-only or contradict a documented design
+  decision; each has a reason. Suppress individual findings in code with
+  @SuppressWarnings("PMD.RuleName") plus a comment, never by widening this file.
+-->
+<ruleset name="Chirp"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+    <description>Defect-oriented rules for the Chirp library.</description>
+
+    <rule ref="category/java/bestpractices.xml">
+        <!-- the console package prints by design; elsewhere a test guards against stray output -->
+        <exclude name="SystemPrintln"/>
+        <!-- style only -->
+        <exclude name="AvoidReassigningParameters"/>
+        <exclude name="ForLoopCanBeForeach"/>
+        <exclude name="UseVarargs"/>
+        <exclude name="OneDeclarationPerLine"/>
+        <exclude name="LooseCoupling"/>
+        <exclude name="AccessorMethodGeneration"/>
+        <exclude name="ExhaustiveSwitchHasDefault"/>
+        <!-- no logging framework in use -->
+        <exclude name="GuardLogStatement"/>
+    </rule>
+
+    <rule ref="category/java/errorprone.xml">
+        <!-- idiomatic `while ((line = reader.readLine()) != null)` -->
+        <exclude name="AssignmentInOperand"/>
+        <!-- noise: literals, messages and builder fields named after their setters -->
+        <exclude name="AvoidDuplicateLiterals"/>
+        <exclude name="AvoidLiteralsInIfCondition"/>
+        <exclude name="AvoidFieldNameMatchingMethodName"/>
+        <exclude name="AvoidFieldNameMatchingTypeName"/>
+        <exclude name="NullAssignment"/>
+        <!-- Java serialization is not part of the library contract -->
+        <exclude name="NonSerializableClass"/>
+    </rule>
+
+    <rule ref="category/java/multithreading.xml">
+        <!-- the library legitimately manages a few daemon threads (spinners, samplers) -->
+        <exclude name="DoNotUseThreads"/>
+        <!-- style / opinion -->
+        <exclude name="UseConcurrentHashMap"/>
+        <exclude name="AvoidSynchronizedAtMethodLevel"/>
+        <exclude name="AvoidSynchronizedStatement"/>
+        <exclude name="AvoidUsingVolatile"/>
+    </rule>
+
+    <rule ref="category/java/security.xml"/>
+
+    <rule ref="category/java/performance.xml">
+        <!-- micro-optimisations that hurt readability in a beginner-friendly API -->
+        <exclude name="AvoidInstantiatingObjectsInLoops"/>
+        <exclude name="RedundantFieldInitializer"/>
+        <exclude name="InsufficientStringBufferDeclaration"/>
+        <exclude name="ConsecutiveLiteralAppends"/>
+        <exclude name="ConsecutiveAppendsShouldReuse"/>
+        <exclude name="TooFewBranchesForSwitch"/>
+        <exclude name="UseStringBufferForStringAppends"/>
+    </rule>
+
+    <!-- selected design rules that point at real error-handling defects -->
+    <rule ref="category/java/design.xml/AvoidThrowingRawExceptionTypes"/>
+    <rule ref="category/java/design.xml/AvoidThrowingNullPointerException"/>
+    <rule ref="category/java/design.xml/AvoidRethrowingException"/>
+    <rule ref="category/java/design.xml/AvoidThrowingNewInstanceOfSameException"/>
+    <rule ref="category/java/design.xml/DoNotExtendJavaLangError"/>
+    <rule ref="category/java/design.xml/SimplifiedTernary"/>
+    <rule ref="category/java/design.xml/SimplifyConditional"/>
+</ruleset>
