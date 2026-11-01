@@ -1,5 +1,6 @@
 package chirp.internal;
 
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -116,9 +117,11 @@ public final class Capabilities {
             }
             String output = new String(bytes, StandardCharsets.ISO_8859_1);
             return output.contains("65001");
-        } catch (java.io.IOException | InterruptedException e) {
-            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+        } catch (IOException e) {
             return false; // safest fallback on Windows
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         } finally {
             if (process != null) process.destroy();
         }

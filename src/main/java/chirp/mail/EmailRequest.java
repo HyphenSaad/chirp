@@ -684,7 +684,8 @@ public final class EmailRequest {
         try {
             return chirp.console.Input.readRaw("SMTP password").trim();
         } catch (RuntimeException e) {
-            throw EmailException.missingConfig("Cannot prompt for password: " + e.getMessage());
+            throw new EmailException(EmailException.Reason.MISSING_CONFIG,
+                    "Cannot prompt for password: " + e.getMessage(), e);
         }
     }
 

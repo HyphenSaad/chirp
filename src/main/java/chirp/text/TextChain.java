@@ -116,5 +116,7 @@ public final class TextChain {
     public String get() { return source.get(); }
     public String value() { return source.get(); }
     public String result() { return source.get(); }
+    
+    @Override
     public String toString() { return source.get(); }
 }

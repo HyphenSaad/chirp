@@ -154,7 +154,7 @@ public final class JsonParser {
                         try {
                             sb.append((char) Integer.parseInt(hex, 16));
                         } catch (NumberFormatException e) {
-                            throw new JsonException("Invalid unicode escape: " + hex);
+                          throw new JsonException("Invalid unicode escape: " + hex, e);
                         }
                     }
                     default -> throw new JsonException("Invalid escape: \\" + esc);

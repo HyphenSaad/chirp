@@ -62,7 +62,7 @@ public final class Check {
 
     public static boolean isNull(Object o) { return o == null; }
     public static boolean notNull(Object o) { return o != null; }
-    public static boolean isBlank(String s) { return s == null || s.trim().isEmpty(); }
+    public static boolean isBlank(String s) { return s == null || s.isBlank(); }
     public static boolean notBlank(String s) { return !isBlank(s); }
     public static boolean isEmpty(String s) { return s == null || s.isEmpty(); }
     public static boolean notEmpty(String s) { return !isEmpty(s); }

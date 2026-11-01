@@ -34,9 +34,16 @@ public final class JsonNumber implements JsonValue {
     }
 
     public String raw() { return raw; }
+
+    @Override
     public double asDouble() { return Double.parseDouble(raw); }
+
+    @Override
     public long asLong() { return (long) asDouble(); }
+    
+    @Override
     public int asInt() { return (int) asDouble(); }
+
     public boolean isInteger() {
         return raw.indexOf('.') < 0 && raw.indexOf('e') < 0 && raw.indexOf('E') < 0;
     }

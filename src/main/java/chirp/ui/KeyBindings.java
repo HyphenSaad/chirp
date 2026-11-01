@@ -184,6 +184,9 @@ public final class KeyBindings {
                 return KeyCode.PLUS;
             case "-", "minus", "subtract" :
                 return KeyCode.MINUS;
+            default: {
+                // Fall through to single-letter handling below.
+            }
         }
         if (t.length() == 1) {
             char c = Character.toUpperCase(t.charAt(0));

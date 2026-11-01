@@ -61,7 +61,9 @@ public final class Logger {
                 sink.accept(level, text);
                 return;
             } catch (RuntimeException sinkFailure) {
-                // fall through: a broken console must not hide the message
+                // A broken console must never hide the message — fall through
+                // to the platform logger. Trace the sink failure for diagnosis.
+                Trace.debug("logger", "console sink threw: {}", sinkFailure.getMessage());
             }
         }
         if (cause == null) PLATFORM.log(level, text);

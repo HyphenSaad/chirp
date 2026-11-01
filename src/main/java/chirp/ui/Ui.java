@@ -28,11 +28,15 @@ import javafx.stage.Stage;
  * Ui.app(() -> Ui.show("App", root));
  * }</pre>
  *
- * <h2>Listener exception policy</h2>
- * <p>Lifecycle hooks ({@code onClose}, {@code onShow}) are best-effort: a
- * broken hook must never break the window. Exceptions from hooks are logged
- * via {@link Trace#warn(String, String)} so they surface when tracing is
- * enabled, and are otherwise ignored.</p>
+ * <h2>Lifecycle hooks</h2>
+ * <p>{@link #app(Runnable, Runnable)} registers two hooks:</p>
+ * <ul>
+ *   <li>{@code onStart} runs on the JavaFX application thread once the toolkit
+ *       is ready. Typical use: create a scene, call {@code Ui.show(...)}.</li>
+ *   <li>{@code onClose} runs when the JVM shuts down (registered as a
+ *       shutdown hook). Typical use: flush logs, save state. Runs on a
+ *       background thread, not the FX thread.</li>
+ * </ul>
  */
 public final class Ui {
 
@@ -41,23 +45,22 @@ public final class Ui {
     // ============================================================== entry point
 
     /** Starts JavaFX (once) and runs {@code entry} on the FX thread. */
-    public static void app(Runnable entry) {
-        launch(entry);
-    }
-    public static void launch(Runnable entry) { launch(entry, null, null); }
-    public static void start(Runnable entry) { launch(entry); }
-    public static void run(Runnable entry) { launch(entry); }
-    public static void boot(Runnable entry) { launch(entry); }
+    public static void app(Runnable entry) { launch(entry, null); }
+    public static void launch(Runnable entry) { launch(entry, null); }
+    public static void start(Runnable entry) { launch(entry, null); }
+    public static void run(Runnable entry) { launch(entry, null); }
+    public static void boot(Runnable entry) { launch(entry, null); }
 
     /** Full entry point with optional onStart / onClose hooks. */
     public static void app(Runnable onStart, Runnable onClose) {
-        launch(onStart, onStart, onClose);
+        launch(onStart, onClose);
     }
 
-    private static void launch(Runnable noop, Runnable onStart, Runnable onClose) {
+    private static void launch(Runnable onStart, Runnable onClose) {
         Runnable wrapped = () -> {
+            if (onStart == null) return;
             try {
-                noop.run();
+                onStart.run();
             } catch (RuntimeException t) {
                 // The user's own startup code threw. Print the stack trace —
                 // it is their application to debug, not the library.
@@ -68,6 +71,15 @@ public final class Ui {
             Platform.startup(wrapped);
         } catch (IllegalStateException alreadyRunning) {
             Platform.runLater(wrapped);
+        }
+        if (onClose != null) {
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                try {
+                    onClose.run();
+                } catch (RuntimeException t) {
+                    t.printStackTrace();
+                }
+            }, "chirp-ui-onclose"));
         }
     }
 

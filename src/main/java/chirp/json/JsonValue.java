@@ -52,7 +52,7 @@ public sealed interface JsonValue
             try {
                 return Double.parseDouble(string.value());
             } catch (NumberFormatException e) {
-                throw new JsonException("Not a number: " + string.value());
+              throw new JsonException("Not a number: " + string.value(), e);
             }
         }
         throw new JsonException("Expected a number but found " + typeName());

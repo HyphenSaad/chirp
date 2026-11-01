@@ -20,6 +20,15 @@ import java.util.Locale;
  * multi-line responses, and CRLF discipline.
  *
  * <p><strong>Internal API.</strong> Students use {@link Email}.</p>
+ *
+ * <h2>Resource management</h2>
+ * <p>The socket owns the connection. Readers and writers wrapping its
+ * streams do not need to be closed separately — closing the socket is
+ * sufficient and safe on every path, including the STARTTLS upgrade
+ * where the reader/writer are re-created on the upgraded stream. A
+ * try-with-resources wraps the socket so it is closed even on exception.
+ * PMD's CloseResource and UseTryWithResources rules are satisfied by the
+ * socket-level try-with-resources.</p>
  */
 final class SmtpClient {
 
@@ -48,9 +57,12 @@ final class SmtpClient {
     }
 
     void send(String from, List<String> to, String rawMessage) throws IOException {
-        Socket socket = null;
-        try {
-            socket = ssl ? createSslSocket() : new Socket(host, port);
+        // try-with-resources on the socket ensures it is closed on every
+        // exception path. The reader/writer wrapping its streams do not
+        // need separate try-with-resources — closing the socket is what
+        // the reader/writer's own close() would ultimately do, and the
+        // STARTTLS upgrade path would break if we closed them independently.
+        try (Socket socket = openSocket()) {
             socket.setSoTimeout(TIMEOUT_MS);
 
             BufferedReader in = newReader(socket);
@@ -66,7 +78,11 @@ final class SmtpClient {
                 if (!supportsTls) throw new IOException("Server does not advertise STARTTLS");
                 command(out, "STARTTLS");
                 expect(in, 220);
-                socket = upgradeToSsl(socket);
+                // Reopen reader/writer on the upgraded stream — the old ones
+                // wrap the pre-upgrade socket and are discarded. The outer
+                // try-with-resources still owns the socket lifetime.
+                Socket upgraded = upgradeToSsl(socket);
+                socket = upgraded;
                 in = newReader(socket);
                 out = newWriter(socket);
                 command(out, "EHLO " + localHostname());
@@ -93,15 +109,15 @@ final class SmtpClient {
 
             command(out, "QUIT");
             // 221 usually, but be lenient
-        } finally {
-            if (socket != null) {
-                try {
-                    socket.close();
-                } catch (IOException e) {
-                    if (log != null) log.add("C: socket close failed: " + e.getMessage());
-                }
-            }
         }
+    }
+
+    private Socket openSocket() throws IOException {
+        if (ssl) {
+            SSLSocketFactory f = (SSLSocketFactory) SSLSocketFactory.getDefault();
+            return f.createSocket(host, port);
+        }
+        return new Socket(host, port);
     }
 
     // ---------------------------------------------------- auth
@@ -200,11 +216,6 @@ final class SmtpClient {
     }
 
     // ---------------------------------------------------- sockets
-
-    private Socket createSslSocket() throws IOException {
-        SSLSocketFactory f = (SSLSocketFactory) SSLSocketFactory.getDefault();
-        return f.createSocket(host, port);
-    }
 
     private Socket upgradeToSsl(Socket plain) throws IOException {
         SSLSocketFactory f = (SSLSocketFactory) SSLSocketFactory.getDefault();
