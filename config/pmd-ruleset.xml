@@ -84,6 +84,14 @@
           library's own error to log via a framework.
         -->
         <exclude name="AvoidPrintStackTrace"/>
+        <!--
+          Http.checkOnline pings three well-known public DNS servers
+          (1.1.1.1, 8.8.8.8, 208.67.222.222). Hardcoding these is the point:
+          they are documented public endpoints, not configuration that could
+          ever point somewhere malicious. In PMD 6 this rule lived in
+          security.xml; PMD 7 moved it to bestpractices.xml.
+        -->
+        <exclude name="AvoidUsingHardCodedIP"/>
     </rule>
 
     <rule ref="category/java/errorprone.xml">
@@ -135,15 +143,7 @@
         <exclude name="AvoidUsingVolatile"/>
     </rule>
 
-    <rule ref="category/java/security.xml">
-        <!--
-          Http.checkOnline pings three well-known public DNS servers
-          (1.1.1.1, 8.8.8.8, 208.67.222.222). Hardcoding these is the point:
-          they are documented public endpoints, not configuration that could
-          ever point somewhere malicious.
-        -->
-        <exclude name="AvoidUsingHardCodedIP"/>
-    </rule>
+    <rule ref="category/java/security.xml"/>
 
     <rule ref="category/java/performance.xml">
         <!-- micro-optimisations that hurt readability in a beginner-friendly API -->
