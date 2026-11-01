@@ -1,3 +1,7 @@
+---
+render_with_liquid: false
+---
+
 # Chirp Examples
 
 Runnable, before-and-after examples for every feature of Chirp.

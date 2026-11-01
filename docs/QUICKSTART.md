@@ -1,3 +1,7 @@
+---
+render_with_liquid: false
+---
+
 # Quick Start
 
 Get from zero to a running program in **under five minutes**.

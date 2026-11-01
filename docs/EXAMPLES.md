@@ -1,3 +1,7 @@
+---
+render_with_liquid: false
+---
+
 # Examples — Chirp vs. standard Java
 
 Every feature shown **with** and **without** Chirp. Copy-paste ready.

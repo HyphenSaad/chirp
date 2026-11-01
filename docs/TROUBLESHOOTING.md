@@ -1,3 +1,7 @@
+---
+render_with_liquid: false
+---
+
 # Troubleshooting
 
 When things go wrong, this is where to look.

@@ -1,3 +1,7 @@
+---
+render_with_liquid: false
+---
+
 # Chirp API Reference
 
 Comprehensive reference for every public class and method in Chirp.

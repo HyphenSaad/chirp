@@ -1,3 +1,7 @@
+---
+render_with_liquid: false
+---
+
 # Installation
 
 Detailed installation guide for every platform and IDE.

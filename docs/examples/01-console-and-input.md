@@ -1,3 +1,7 @@
+---
+render_with_liquid: false
+---
+
 # Console and Input
 
 Printing text, formatting output, reading validated input.
