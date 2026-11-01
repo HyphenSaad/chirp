@@ -246,6 +246,7 @@ public final class Retry {
      * @see #run(Runnable)
      * @since 1.0.0
      */
+    @SuppressWarnings("PMD.AvoidCatchingThrowable")
     public <T> T execute(Supplier<T> supplier) {
         if (supplier == null) return null;
         Throwable last = null;
