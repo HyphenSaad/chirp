@@ -11,7 +11,7 @@
     <packaging>jar</packaging>
 
     <name>Chirp</name>
-    <description>A friendly Java toolkit for teaching object-oriented programming.</description>
+    <description>A friendly Java toolkit for developers who want to write less boilerplate and focus on what matters.</description>
     <url>https://github.com/hyphensaad/chirp</url>
 
     <licenses>
