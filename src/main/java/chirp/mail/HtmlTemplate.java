@@ -61,8 +61,9 @@ public final class HtmlTemplate {
             throw new EmailException(EmailException.Reason.MISSING_CONFIG,
                     "HTML template path is required");
         }
+        // TextFileIO.readAll never returns null: it returns "" on failure.
         String content = TextFileIO.readAll(path);
-        if (content == null || content.isBlank()) {
+        if (content.isBlank()) {
             throw new EmailException(EmailException.Reason.MISSING_CONFIG,
                     "HTML template is empty or missing: " + path);
         }

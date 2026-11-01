@@ -322,7 +322,11 @@ public final class TextFileIO {
     public static List<String> listFiles(String directory) {
         List<String> names = new ArrayList<>();
         try (var stream = Files.list(Path.of(directory))) {
-            stream.forEach(p -> names.add(p.getFileName().toString()));
+            stream.forEach(p -> {
+                // Root paths (filesystem roots) have no filename component.
+                Path name = p.getFileName();
+                if (name != null) names.add(name.toString());
+            });
             Trace.debug("file", "listFiles({}) -> {} entries", directory, names.size());
         } catch (IOException e) {
             Logger.error("Cannot list " + directory);

@@ -65,7 +65,7 @@ public final class Decorator {
     public static <T> T retried(Supplier<T> supplier) { return Retry.defaults().execute(supplier); }
     public static <T> T withRetry(Supplier<T> supplier) { return Retry.defaults().execute(supplier); }
 
-    // ============================================================== retry (int + executor) — NEW
+    // ============================================================== retry (int + executor)
 
     public static <T> T retry(int attempts, Supplier<T> supplier) {
         return Retry.of(attempts, Duration.ofMillis(500)).execute(supplier);
@@ -80,7 +80,7 @@ public final class Decorator {
         if (supplier == null) return Optional.empty();
         try {
             return Optional.ofNullable(supplier.get());
-        } catch (Throwable t) {
+        } catch (RuntimeException t) {
             Trace.warn("decorator", "safe() swallowed: {}", t.getMessage());
             return Optional.empty();
         }
@@ -94,7 +94,7 @@ public final class Decorator {
         try {
             action.run();
             return true;
-        } catch (Throwable t) {
+        } catch (RuntimeException t) {
             Trace.warn("decorator", "safe() swallowed: {}", t.getMessage());
             return false;
         }
@@ -185,7 +185,7 @@ public final class Decorator {
         if (supplier == null) return fallback;
         try {
             return supplier.get();
-        } catch (Throwable t) {
+        } catch (RuntimeException t) {
             Trace.warn("decorator", "withFallback caught: {}", t.getMessage());
             return fallback;
         }
@@ -196,11 +196,11 @@ public final class Decorator {
     public static <T> T withFallback(Supplier<T> primary, Supplier<T> secondary, T lastResort) {
         try {
             if (primary != null) return primary.get();
-        } catch (Throwable t1) {
+        } catch (RuntimeException t1) {
             Trace.warn("decorator", "primary failed: {}", t1.getMessage());
             try {
                 if (secondary != null) return secondary.get();
-            } catch (Throwable t2) {
+            } catch (RuntimeException t2) {
                 Trace.warn("decorator", "secondary failed: {}", t2.getMessage());
             }
         }
@@ -234,6 +234,11 @@ public final class Decorator {
                     }
                     case MEASURE -> {
                         if (v instanceof Boolean b) measure = b;
+                    }
+                    default -> {
+                        // TIMEOUT_MS, VERBOSE, FALLBACK are recognised key names
+                        // but not yet wired into this helper. Reserved for a
+                        // future release; silently ignore for now.
                     }
                 }
             }

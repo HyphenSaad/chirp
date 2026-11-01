@@ -3,6 +3,7 @@ package chirp.collection;
 import chirp.internal.Trace;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -175,7 +176,20 @@ public final class Filter {
     }
     public static <T> Split<T> split(List<T> items, Predicate<T> predicate) { return partition(items, predicate); }
 
+    /**
+     * Pairs of (matching, non-matching) items.
+     *
+     * <p>Both lists are wrapped in {@link Collections#unmodifiableList} in the
+     * canonical constructor so callers cannot mutate the record's internals
+     * by keeping a reference to the lists passed to the constructor.</p>
+     */
     public record Split<T>(List<T> matching, List<T> nonMatching) {
+        public Split {
+            matching = matching == null ? List.of()
+                    : Collections.unmodifiableList(new ArrayList<>(matching));
+            nonMatching = nonMatching == null ? List.of()
+                    : Collections.unmodifiableList(new ArrayList<>(nonMatching));
+        }
         public List<T> matchingItems() { return matching; }
         public List<T> nonMatchingItems() { return nonMatching; }
     }

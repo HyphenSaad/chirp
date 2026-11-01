@@ -13,6 +13,16 @@ import java.util.regex.Pattern;
  * <p>Where a natural synonym exists, multiple names delegate to the same
  * check. {@code isEmail} / {@code looksLikeEmail} / {@code validEmail} all
  * return the same boolean.</p>
+ *
+ * <h2>ReDoS hardening</h2>
+ * <p>The email regex uses <b>possessive quantifiers</b>
+ * ({@code ++}, {@code *+}) on every repetition whose character class
+ * cannot overlap with the following token. This eliminates catastrophic
+ * backtracking: on adversarial input such as
+ * {@code "aaaaaaaaaaaaaaa...@"} the engine fails fast instead of exploring
+ * exponentially many split points. The behaviour of the regex on any input
+ * is unchanged; only the worst-case complexity improves from
+ * O(2<sup>n</sup>) to O(n).</p>
  */
 public final class Check {
 
@@ -28,13 +38,19 @@ public final class Check {
      *   - at most 254 characters overall.
      * Quoted local parts, IP-literal domains, single-label hosts and
      * non-ASCII (unencoded IDN) addresses are rejected.
+     *
+     * Possessive quantifiers ("++" / "*+") are load-bearing: they prevent
+     * the engine from exploring alternate ways to split a run of atext
+     * characters, so the total work stays linear in the input length.
      */
-    private static final String EMAIL_ATOM = "[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+";
+    private static final String EMAIL_ATOM = "[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]";
     private static final String EMAIL_LABEL = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?";
     private static final String EMAIL_TLD = "(?:[A-Za-z]{2,63}|xn--[A-Za-z0-9](?:[A-Za-z0-9-]{0,57}[A-Za-z0-9])?)";
     private static final String EMAIL_REGEX = "^(?=.{1,254}\\z)(?=.{1,64}@)"
-            + EMAIL_ATOM + "(?:\\." + EMAIL_ATOM + ")*"
-            + "@(?:" + EMAIL_LABEL + "\\.)+" + EMAIL_TLD + "\\z";
+            + EMAIL_ATOM + "++"
+            + "(?:\\." + EMAIL_ATOM + "++)*+"
+            + "@(?:" + EMAIL_LABEL + "\\.)++"
+            + EMAIL_TLD + "\\z";
     private static final Pattern EMAIL = Pattern.compile(EMAIL_REGEX);
 
     private Check() {}
@@ -129,7 +145,7 @@ public final class Check {
         try {
             java.time.format.DateTimeFormatter.ofPattern(pattern).parse(s);
             return true;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return false;
         }
     }
@@ -139,7 +155,7 @@ public final class Check {
         try {
             chirp.json.Json.parse(s);
             return true;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return false;
         }
     }

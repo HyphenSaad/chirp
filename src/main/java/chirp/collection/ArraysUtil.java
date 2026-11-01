@@ -476,8 +476,21 @@ public final class ArraysUtil {
         return new SplitResult<>(matching, nonMatching);
     }
 
-    /** Two-way split — pairs matching/non-matching. */
+    /**
+     * Two-way split — pairs matching/non-matching.
+     *
+     * <p>Both lists are wrapped in {@link Collections#unmodifiableList} in the
+     * canonical constructor so callers get a read-only view of the split and
+     * cannot mutate the record's internals by keeping a reference to the
+     * passed-in lists.</p>
+     */
     public record SplitResult<T>(List<T> matching, List<T> nonMatching) {
+        public SplitResult {
+            matching = matching == null ? List.of()
+                    : Collections.unmodifiableList(new ArrayList<>(matching));
+            nonMatching = nonMatching == null ? List.of()
+                    : Collections.unmodifiableList(new ArrayList<>(nonMatching));
+        }
         public List<T> matchingItems() { return matching; }
         public List<T> nonMatchingItems() { return nonMatching; }
     }
