@@ -43,7 +43,16 @@ public final class FormBuilder {
     private String resetLabel = null;
     private Consumer<java.util.Map<String, String>> onSubmit;
     private Runnable onReset;
-    private Label summaryLabel;
+
+    /**
+     * Always a valid Label instance. Reassigned by {@link #build()} on every
+     * call so that "build once, add to a Scene, build again, add to another
+     * Scene" works. The field-level initializer guarantees that
+     * {@link #handleSubmit()} and {@link #handleReset()} cannot NPE, even if
+     * a caller somehow manages to fire a handler before {@code build()} has
+     * produced its first root.
+     */
+    private Label summaryLabel = Label.error("");
 
     private record NamedField(String name, Field field) {}
 

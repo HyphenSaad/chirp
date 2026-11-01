@@ -1,5 +1,7 @@
 package chirp.ui;
 
+import chirp.internal.Trace;
+
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
@@ -25,6 +27,12 @@ import javafx.stage.Stage;
  * <pre>{@code
  * Ui.app(() -> Ui.show("App", root));
  * }</pre>
+ *
+ * <h2>Listener exception policy</h2>
+ * <p>Lifecycle hooks ({@code onClose}, {@code onShow}) are best-effort: a
+ * broken hook must never break the window. Exceptions from hooks are logged
+ * via {@link Trace#warn(String, String)} so they surface when tracing is
+ * enabled, and are otherwise ignored.</p>
  */
 public final class Ui {
 
@@ -50,7 +58,9 @@ public final class Ui {
         Runnable wrapped = () -> {
             try {
                 noop.run();
-            } catch (Throwable t) {
+            } catch (RuntimeException t) {
+                // The user's own startup code threw. Print the stack trace —
+                // it is their application to debug, not the library.
                 t.printStackTrace();
             }
         };
@@ -155,14 +165,18 @@ public final class Ui {
             stage.setOnCloseRequest(e -> {
                 try {
                     app.onClose().run();
-                } catch (Exception ignored) {}
+                } catch (RuntimeException ex) {
+                    Trace.warn("ui", "onClose hook threw: " + ex.getMessage());
+                }
             });
         }
         if (app.onShow() != null) {
             stage.setOnShowing(e -> {
                 try {
                     app.onShow().run();
-                } catch (Exception ignored) {}
+                } catch (RuntimeException ex) {
+                    Trace.warn("ui", "onShow hook threw: " + ex.getMessage());
+                }
             });
         }
         return stage;
@@ -205,7 +219,9 @@ public final class Ui {
             Platform.runLater(() -> { run.run(); latch.countDown(); });
             try {
                 latch.await();
-            } catch (InterruptedException ignored) {}
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
         return result.get();
     }

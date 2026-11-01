@@ -269,7 +269,13 @@ public final class EmailRequest {
         }
         try {
             byte[] data = Files.readAllBytes(p);
-            attachments.add(new Attachment(p.getFileName().toString(), data));
+            // Path.getFileName() returns null for root paths; fall back to the
+            // full string. We already know it is a regular file (checked above),
+            // so it cannot be a filesystem root, but the guard keeps SpotBugs
+            // and the compiler honest.
+            Path fileName = p.getFileName();
+            String name = fileName == null ? p.toString() : fileName.toString();
+            attachments.add(new Attachment(name, data));
         } catch (java.io.IOException e) {
             throw new EmailException(EmailException.Reason.TRANSPORT,
                     "Cannot read attachment: " + path, e);

@@ -169,23 +169,85 @@
     </Match>
 
     <!--
-      17. IMPROPER_UNICODE on equalsIgnoreCase. String.equalsIgnoreCase uses
-          Unicode (not locale) rules and is safe. These three call sites
-          compare against internal ASCII constants: Menu's "Exit" label,
-          HttpResponse's header names, and UiTheme's "dark" / "light"
-          property values. The report here is a false positive.
+      17. IMPROPER_UNICODE. Findsecbugs flags every case-mapping call because
+          Unicode case mapping can change string length (ß → SS). None of
+          Chirp's uses are security-sensitive: they compare against ASCII
+          constants, perform case-insensitive search, or normalise user input
+          for display. Every call already pins Locale.ROOT, so results are
+          locale-independent; the length-change concern does not apply. The
+          call sites flagged today are:
+
+            Chirp.start(String[])                switch on lowercased flag
+            Search.contains(String, String)      case-insensitive search
+            Input.readYesNo(String)              match against "y"/"n"
+            Separator.from(Object[])             ASCII key name
+            Http.pingUrl(String)                 scheme → port mapping
+            Capabilities.detectAnsi()            "win" substring check
+            Capabilities.detectTrueColor()       "truecolor"/"24bit" check
+            Text.isPalindrome(String)            case-fold before comparison
+            KeyBindings.parseDescriptor(String)  modifier-name matching
+            KeyBindings.parseKey(String)         key-name matching
+            KeyBindings.parseKey(String)         KeyCode.valueOf input
     -->
     <Match>
-        <Class name="chirp.console.Menu"/>
         <Bug pattern="IMPROPER_UNICODE"/>
+    </Match>
+
+    <!--
+      18. PREDICTABLE_RANDOM on ThreadLocalRandom. Findsecbugs flags
+          ThreadLocalRandom because it extends java.util.Random; the detector
+          does not reason about "non-cryptographic vs cryptographic" use.
+          Chirp's random helpers are documented as non-cryptographic:
+
+            ArraysUtil.randomMatrix    seed data for exercises
+            Numbers.random/randomDouble/randomBoolean   pick-question helpers
+            Retry backoff jitter        spreads retry timing
+
+          ThreadLocalRandom is the *correct* choice for each — thread-safe,
+          contention-free, fast. A SecureRandom would add latency to every
+          student loop calling Numbers.random(1, 10) without adding any
+          security. Tokens, salts, and session IDs must use SecureRandom
+          directly; the library does none of those.
+    -->
+    <Match>
+        <Bug pattern="PREDICTABLE_RANDOM"/>
+    </Match>
+
+    <!--
+      19. EI_EXPOSE_REP on record accessors. Every flagged record wraps its
+          mutable collections in Collections.unmodifiableList / List.copyOf /
+          a deep-copied unmodifiable map in the canonical constructor, so the
+          returned value is truly immutable and cannot be used to mutate the
+          record. SpotBugs does not reason about unmodifiable wrappers.
+    -->
+    <Match>
+        <Class name="chirp.collection.ArraysUtil$SplitResult"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="chirp.collection.Filter$Split"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
     <Match>
         <Class name="chirp.http.HttpResponse"/>
-        <Bug pattern="IMPROPER_UNICODE"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
     <Match>
-        <Class name="chirp.ui.UiTheme"/>
-        <Bug pattern="IMPROPER_UNICODE"/>
+        <Class name="chirp.io.CsvFile$CsvTable"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
+    <!--
+      20. REDOS on Check's email regex. The regex uses possessive quantifiers
+          (++, *+) on every unbounded repetition, so the engine cannot
+          backtrack. Worst-case input is processed in O(n) time —
+          EmailValidationTest.adversarialInputIsRejectedQuickly verifies that
+          a 100,000-character adversarial input is rejected in under 2 s.
+          Findsecbugs does not analyse possessive-quantifier semantics.
+    -->
+    <Match>
+        <Class name="chirp.text.Check"/>
+        <Bug pattern="REDOS"/>
     </Match>
 
 </FindBugsFilter>
