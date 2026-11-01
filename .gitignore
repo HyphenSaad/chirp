@@ -70,3 +70,5 @@ site/
 *.p12
 *.jks
 secrets/
+
+docs/javadoc/
