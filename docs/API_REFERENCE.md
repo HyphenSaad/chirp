@@ -2,6 +2,8 @@
 render_with_liquid: false
 ---
 
+{% raw %}
+
 # Chirp API Reference
 
 Comprehensive reference for every public class and method in Chirp.
@@ -1136,3 +1138,4 @@ if (result.hasErrors()) {
     result.errors().forEach(this::error);
 }
 ```
+{% endraw %}

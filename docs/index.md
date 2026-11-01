@@ -3,6 +3,8 @@ title: Chirp Documentation
 render_with_liquid: false
 ---
 
+{% raw %}
+
 # Chirp Documentation
 
 **Null-safe Java 17 utilities with a single static import.**
@@ -33,3 +35,4 @@ render_with_liquid: false
 - **[GitHub repository](https://github.com/HyphenSaad/chirp)** — source code, issues, releases
 - **[Latest release](https://github.com/HyphenSaad/chirp/releases/latest)** — download `chirp-1.0.0.jar`
 - **[Report a bug](https://github.com/HyphenSaad/chirp/issues/new?template=bug_report.md)**
+{% endraw %}

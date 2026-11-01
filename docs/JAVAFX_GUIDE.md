@@ -2,6 +2,8 @@
 render_with_liquid: false
 ---
 
+{% raw %}
+
 # Chirp JavaFX Guide
 
 Complete guide to Chirp's JavaFX toolkit.
@@ -1387,3 +1389,4 @@ persist.
 
 Every component is available via `chirp.ui.*`. Every component supports
 fluent construction. Every component uses the active theme.
+{% endraw %}

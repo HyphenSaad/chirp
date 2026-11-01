@@ -2,6 +2,8 @@
 render_with_liquid: false
 ---
 
+{% raw %}
+
 # Troubleshooting
 
 When things go wrong, this is where to look.
@@ -820,3 +822,4 @@ On Linux, this is usually `/tmp`. On Windows, `%TEMP%`. On macOS,
 - 💡 [Examples](EXAMPLES.md)
 - 💬 [GitHub Discussions](https://github.com/hyphensaad/chirp/discussions)
 - 🐛 [Report a bug](https://github.com/hyphensaad/chirp/issues/new?template=bug_report.md)
+{% endraw %}

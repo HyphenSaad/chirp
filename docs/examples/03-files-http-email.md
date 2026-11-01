@@ -2,6 +2,8 @@
 render_with_liquid: false
 ---
 
+{% raw %}
+
 # Files, HTTP, and Email
 
 Working with files, calling APIs, and sending email.
@@ -1233,3 +1235,4 @@ Every step is one line of Chirp. The full program handles: connectivity
 check, retry, file management, JSON, HTML templating, email, spinners,
 attachments, and shutdown summary. In standard Java, this would be 400+
 lines across multiple files.
+{% endraw %}
