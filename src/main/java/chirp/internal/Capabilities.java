@@ -7,64 +7,33 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Detects — once, at class load — what the current terminal supports:
- * ANSI colour, Unicode glyphs, and 24-bit true colour.
+ * Detects — once, at class load — what the current terminal can do.
  *
- * <p><b>Internal API.</b> Do not use directly. Use
- * {@link chirp.config.Config#colorEnabled(boolean)},
- * {@link chirp.startup.StartupConfig.Builder#noUnicode()}, and the
- * {@link Glyphs} style selection instead. This class is the detection
- * layer that those user-facing toggles consult.</p>
+ * <p>Unicode detection on Windows uses two independent signals:</p>
  *
- * <h2>Why detection is nontrivial</h2>
+ * <ol>
+ *   <li><b>{@code stdout.encoding} / {@code sun.stdout.encoding}</b> — the
+ *       charset the JVM uses when writing to {@code System.out}. If it says
+ *       UTF-8, the JVM produces correct UTF-8 bytes for every code point.</li>
+ *   <li><b>{@code cmd /c chcp}</b> — the console codepage reported by a
+ *       subprocess. Reliable on a real console, unreliable under ConPTY
+ *       (VS Code terminal) where subprocesses may attach to a different
+ *       console handle than the parent shell.</li>
+ * </ol>
  *
- * <h3>Windows Unicode is the hard case</h3>
- * <p>Java 18+ reports {@code sun.stdout.encoding=UTF-8} even when the
- * Windows console codepage is still 437 or 1251 — so UTF-8 bytes get
- * written correctly but rendered as mojibake. The only reliable check
- * is to ask Windows for its active console codepage via {@code chcp}
- * and verify it is 65001 (UTF-8). The {@link #isWindowsUtf8()} method
- * does this — it is why the class is not a simple one-liner.</p>
+ * <p>The two are combined: {@code stdout.encoding} is trusted first because
+ * it is what actually determines the bytes Chirp emits; {@code chcp} is the
+ * fallback when the property is missing or ambiguous.</p>
  *
- * <h3>ANSI</h3>
- * <p>On Unix, the presence of {@code TERM} (and its value not being
- * {@code "dumb"}) is enough. On Windows, the presence of
- * {@code WT_SESSION} (Windows Terminal) or {@code ConEmuANSI=ON}
- * indicates a modern terminal; a plain {@code cmd.exe} without those
- * is treated as non-ANSI. The {@code NO_COLOR} env var overrides
- * everything.</p>
- *
- * <h3>True colour</h3>
- * <p>{@code COLORTERM=truecolor} / {@code COLORTERM=24bit} or a
- * {@code TERM} value containing {@code 256color} enables 24-bit RGB
- * escapes. Absent those, {@link Ansi#rgb(int, int, int)} falls back
- * to no-op.</p>
- *
- * <h2>System-property overrides</h2>
- * <p>Every detection can be forced from the command line — useful for
- * tests and for bypassing the heuristics when they guess wrong:</p>
+ * <p>System property overrides:</p>
  * <ul>
- *   <li>{@code -Dchirp.ansi=true|false} — force ANSI on or off</li>
- *   <li>{@code -Dchirp.unicode=true|false} — force Unicode on or off</li>
- *   <li>{@code -Dchirp.ascii=true} — force ASCII (shorthand for
- *       unicode=false)</li>
+ *   <li>{@code -Dchirp.ansi=true|false}   — force ANSI on or off</li>
+ *   <li>{@code -Dchirp.unicode=true|false} — force unicode on or off</li>
+ *   <li>{@code -Dchirp.ascii=true}        — force ASCII (shorthand for unicode=false)</li>
  * </ul>
  *
- * <h2>Test hook</h2>
- * <p>{@link #setUnicodeOverride(Boolean)} overrides the Unicode result
- * at runtime — used by the library's own tests to exercise both code
- * paths without depending on the build machine's console.</p>
- *
- * <h2>Locale</h2>
- * <p>All case-insensitive comparisons use {@link Locale#ROOT} so
- * detection is identical on a Turkish-locale machine (where
- * {@code "I".toLowerCase()} would otherwise produce the dotless
- * {@code "ı"}).</p>
- *
- * @see Ansi
- * @see Glyphs
- * @see chirp.startup.StartupConfig
- * @since 1.0.0
+ * <p>All case-insensitive comparisons use {@link Locale#ROOT} so behaviour is
+ * identical on a Turkish-locale machine.</p>
  */
 public final class Capabilities {
 
@@ -82,51 +51,15 @@ public final class Capabilities {
 
     private Capabilities() {}
 
-    /**
-     * Whether the terminal supports ANSI escape sequences. Detected once
-     * at class load — this method reports the cached result.
-     *
-     * @return {@code true} if ANSI is supported
-     * @see Ansi#isSupported()
-     * @since 1.0.0
-     */
     public static boolean ansi() { return ANSI; }
-
-    /**
-     * Whether the terminal supports 24-bit true-colour escape sequences.
-     * Requires ANSI support in addition to the {@code COLORTERM} /
-     * {@code TERM} signals.
-     *
-     * @return {@code true} if 24-bit RGB escapes will render correctly
-     * @see Ansi#rgb(int, int, int)
-     * @since 1.0.0
-     */
     public static boolean trueColor() { return ANSI && TRUE_COLOR; }
 
-    /**
-     * Whether the terminal can render Unicode glyphs. Respects the
-     * runtime override set by {@link #setUnicodeOverride(Boolean)} —
-     * once the override is set, this returns it instead of the
-     * class-load detection.
-     *
-     * @return {@code true} if Unicode glyphs are safe to emit
-     * @see Glyphs
-     * @see #setUnicodeOverride(Boolean)
-     * @since 1.0.0
-     */
     public static boolean unicode() {
         Boolean override = unicodeOverride;
         return override != null ? override : UNICODE;
     }
 
-    /**
-     * Forces the Unicode result on ({@code true}), off
-     * ({@code false}), or back to the auto-detected value
-     * ({@code null}). Intended for tests.
-     *
-     * @param value the override, or {@code null} to clear it
-     * @since 1.0.0
-     */
+    /** Force unicode on ({@code true}), off ({@code false}), or auto ({@code null}). */
     public static void setUnicodeOverride(Boolean value) {
         unicodeOverride = value;
     }
@@ -155,17 +88,26 @@ public final class Capabilities {
         String override = System.getProperty("chirp.unicode");
         if (override != null) return Boolean.parseBoolean(override);
 
-        // 2. Platform-specific detection
+        // 2. The JVM's stdout encoding is the primary signal. This is the
+        //    charset used when Chirp writes to System.out, so it decides
+        //    whether the bytes on screen are UTF-8 or not. On Windows this
+        //    also survives the ConPTY case where the chcp subprocess sees a
+        //    different console handle than the parent shell.
+        String stdoutEnc = readStdoutEncoding();
+        if (stdoutEnc.contains("utf")) return true;
+
+        // 3. Windows: fall back to the chcp subprocess. Only reached when
+        //    stdout encoding is unknown or non-UTF, so we're confirming a
+        //    suspicion rather than overriding a positive signal.
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("win")) {
-            // Windows: trust ONLY the console codepage, not sun.stdout.encoding
             return isWindowsUtf8();
         }
 
-        // 3. Unix / macOS: sun.stdout.encoding is authoritative
-        String stdoutEnc = System.getProperty("sun.stdout.encoding", "").toLowerCase(Locale.ROOT);
-        if (!stdoutEnc.isEmpty()) return stdoutEnc.contains("utf");
+        // 4. Non-Windows: stdout encoding is authoritative when set
+        if (!stdoutEnc.isEmpty()) return false;
 
+        // 5. Fallback: default charset
         try {
             String name = Charset.defaultCharset().name().toLowerCase(Locale.ROOT);
             return name.contains("utf-8") || name.contains("utf8");
@@ -176,8 +118,26 @@ public final class Capabilities {
     }
 
     /**
-     * Runs {@code chcp} once and checks for codepage 65001 (UTF-8).
-     * Cached at class load — safe to call repeatedly thereafter.
+     * Reads the JVM's stdout encoding. Tries the Java 18+ property
+     * ({@code stdout.encoding}) first, then the older {@code sun.stdout.encoding}
+     * backport. Returns lowercased text so {@code contains("utf")} works on
+     * both {@code UTF-8} and {@code utf8}.
+     */
+    private static String readStdoutEncoding() {
+        String enc = System.getProperty("stdout.encoding");
+        if (enc == null || enc.isEmpty()) {
+            enc = System.getProperty("sun.stdout.encoding", "");
+        }
+        return enc == null ? "" : enc.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Runs {@code chcp} in a subprocess and checks for codepage 65001 (UTF-8).
+     *
+     * <p>Reliable on a real console window. Unreliable under ConPTY — see the
+     * class-level Javadoc. When this returns {@code false} but
+     * {@code stdout.encoding} says UTF-8, {@code detectUnicode()} trusts the
+     * encoding property, not the subprocess.</p>
      */
     private static boolean isWindowsUtf8() {
         Process process = null;
@@ -194,7 +154,7 @@ public final class Capabilities {
             String output = new String(bytes, StandardCharsets.ISO_8859_1);
             return output.contains("65001");
         } catch (IOException e) {
-            return false; // safest fallback on Windows
+            return false;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return false;
