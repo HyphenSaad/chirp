@@ -1,5 +1,6 @@
 ---
 title: Chirp Documentation
+render_with_liquid: false
 ---
 
 # Chirp Documentation

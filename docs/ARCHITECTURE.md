@@ -1,3 +1,7 @@
+---
+render_with_liquid: false
+---
+
 # Architecture
 
 How Chirp is designed, and why.

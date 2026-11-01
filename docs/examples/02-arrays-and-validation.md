@@ -1,3 +1,7 @@
+---
+render_with_liquid: false
+---
+
 # Arrays and Validation
 
 Working with arrays (1D, 2D, 3D) and validating data.

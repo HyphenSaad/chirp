@@ -1,3 +1,7 @@
+---
+render_with_liquid: false
+---
+
 # Chirp JavaFX Guide
 
 Complete guide to Chirp's JavaFX toolkit.
