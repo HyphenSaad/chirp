@@ -2,6 +2,8 @@
 render_with_liquid: false
 ---
 
+{% raw %}
+
 # Arrays and Validation
 
 Working with arrays (1D, 2D, 3D) and validating data.
@@ -691,3 +693,4 @@ F (0-59)                                        (0)
 
 A program that would take 150+ lines in standard Java takes 80 with
 Chirp — and the 80 lines are all logic, not boilerplate.
+{% endraw %}

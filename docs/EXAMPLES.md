@@ -2,6 +2,8 @@
 render_with_liquid: false
 ---
 
+{% raw %}
+
 # Examples — Chirp vs. standard Java
 
 Every feature shown **with** and **without** Chirp. Copy-paste ready.
@@ -1694,3 +1696,4 @@ from file operations. Zero `NumberFormatException` from bad user input.
 
 Every module is opt-in, every method is null-safe, every error is
 recoverable. Write less, ship more.
+{% endraw %}

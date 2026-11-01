@@ -2,6 +2,8 @@
 render_with_liquid: false
 ---
 
+{% raw %}
+
 # Quick Start
 
 Get from zero to a running program in **under five minutes**.
@@ -243,3 +245,4 @@ rule, which usually means the user could submit invalid input. Either add
 strict warnings globally with `Config.strictWarnings(false)`.
 
 See [API Reference § Strict warnings](API_REFERENCE.md#strict-warnings).
+{% endraw %}

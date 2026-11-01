@@ -2,6 +2,8 @@
 render_with_liquid: false
 ---
 
+{% raw %}
+
 # Chirp Examples
 
 Runnable, before-and-after examples for every feature of Chirp.
@@ -121,3 +123,4 @@ Examples live in `docs/examples/`. To add one:
 Examples are reviewed for clarity more than for brevity — a reader
 learning Chirp should be able to run any snippet and understand the
 result.
+{% endraw %}

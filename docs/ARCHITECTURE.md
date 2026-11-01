@@ -2,6 +2,8 @@
 render_with_liquid: false
 ---
 
+{% raw %}
+
 # Architecture
 
 How Chirp is designed, and why.
@@ -593,3 +595,4 @@ Chirp is small, deliberate, and consistent:
 - **Structured for testability** — 500+ tests, structural manifest
 - **Buildable, formattable, analysable** — compiler warnings fail the build
 - **Distributed as JARs** — no build tool required for end users
+{% endraw %}

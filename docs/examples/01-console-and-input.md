@@ -2,6 +2,8 @@
 render_with_liquid: false
 ---
 
+{% raw %}
+
 # Console and Input
 
 Printing text, formatting output, reading validated input.
@@ -603,3 +605,4 @@ DOB         Saturday, January 15, 2000
 ════════════════════════════════════════════════════════════
 ✔ Profile complete for Saad Mansoor
 ```
+{% endraw %}

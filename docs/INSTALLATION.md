@@ -2,6 +2,8 @@
 render_with_liquid: false
 ---
 
+{% raw %}
+
 # Installation
 
 Detailed installation guide for every platform and IDE.
@@ -282,3 +284,4 @@ If not, see [Troubleshooting](TROUBLESHOOTING.md#installation-problems).
 
 No configuration changes required — `.vscode/settings.json` uses
 `lib/**/*.jar`, so it automatically picks up new versions.
+{% endraw %}

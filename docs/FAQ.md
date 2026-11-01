@@ -2,6 +2,8 @@
 render_with_liquid: false
 ---
 
+{% raw %}
+
 # Frequently Asked Questions
 
 Answers to questions we hear most often.
@@ -705,3 +707,4 @@ Not at this time. Use GitHub Discussions for community questions.
 - 🔧 [Troubleshooting](TROUBLESHOOTING.md)
 - 💬 [GitHub Discussions](https://github.com/hyphensaad/chirp/discussions)
 - 🐛 [Report a bug](https://github.com/hyphensaad/chirp/issues/new?template=bug_report.md)
+{% endraw %}
