@@ -3,6 +3,7 @@ package chirp.console;
 import chirp.internal.Ansi;
 import chirp.internal.Capabilities;
 import chirp.internal.Glyphs;
+import chirp.internal.Trace;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -21,6 +22,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * try { send(); l.success("Sent"); }
  * catch (Exception e) { l.error("Failed: " + e.getMessage()); }
  * }</pre>
+ *
+ * <p><b>Synchronization:</b> a private {@link #PRINT_LOCK} serialises output
+ * between the spinner thread and callers of {@link #success} / {@link #error} /
+ * {@link #warn}. Using a private lock (rather than {@code System.out})
+ * prevents other code from accidentally holding the same monitor.</p>
  */
 public final class Loader {
 
@@ -28,6 +34,9 @@ public final class Loader {
             "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"
     };
     private static final String[] ASCII_FRAMES = {"|", "/", "-", "\\"};
+
+    /** Private lock — output serialization without exposing {@code System.out}. */
+    private static final Object PRINT_LOCK = new Object();
 
     private final String label;
     private final Thread thread;
@@ -59,7 +68,7 @@ public final class Loader {
         String[] frames = Capabilities.unicode() ? UNICODE_FRAMES : ASCII_FRAMES;
         int i = 0;
         while (running.get()) {
-            synchronized (System.out) {
+            synchronized (PRINT_LOCK) {
                 System.out.print("\r" + frames[i++ % frames.length] + " " + label);
                 System.out.flush();
             }
@@ -79,7 +88,7 @@ public final class Loader {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        synchronized (System.out) {
+        synchronized (PRINT_LOCK) {
             System.out.print("\r" + " ".repeat(Math.min(label.length() + 4, 200)) + "\r");
             System.out.flush();
         }
@@ -93,20 +102,26 @@ public final class Loader {
 
     public void success(String msg) {
         stop();
-        System.out.println(Ansi.green() + Glyphs.success() + " " + msg + Ansi.reset());
+        synchronized (PRINT_LOCK) {
+            System.out.println(Ansi.green() + Glyphs.success() + " " + msg + Ansi.reset());
+        }
     }
     public void ok(String msg) { success(msg); }
     public void good(String msg) { success(msg); }
 
     public void error(String msg) {
         stop();
-        System.out.println(Ansi.red() + Glyphs.error() + " " + msg + Ansi.reset());
+        synchronized (PRINT_LOCK) {
+            System.out.println(Ansi.red() + Glyphs.error() + " " + msg + Ansi.reset());
+        }
     }
     public void fail(String msg) { error(msg); }
 
     public void warn(String msg) {
         stop();
-        System.out.println(Ansi.yellow() + Glyphs.warn() + " " + msg + Ansi.reset());
+        synchronized (PRINT_LOCK) {
+            System.out.println(Ansi.yellow() + Glyphs.warn() + " " + msg + Ansi.reset());
+        }
     }
     public void warning(String msg) { warn(msg); }
 
@@ -114,7 +129,9 @@ public final class Loader {
 
     /**
      * Runs {@code action} while a spinner is active, then prints a
-     * success or error line depending on outcome.
+     * success or error line depending on outcome. The exception is logged
+     * via {@link Trace} before being rethrown, so callers see both the
+     * spinner's error line and the stack trace.
      */
     public static void withLoader(String label, Runnable action) {
         if (action == null) return;
@@ -124,6 +141,7 @@ public final class Loader {
             l.success("Done");
         } catch (RuntimeException e) {
             l.error(e.getMessage() == null ? "Failed" : e.getMessage());
+            Trace.warn("loader", "withLoader action threw: " + e.getMessage());
             throw e;
         } finally {
             l.stop();

@@ -1,6 +1,7 @@
 package chirp.io;
 
 import chirp.internal.Logger;
+import chirp.internal.Trace;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
@@ -27,7 +28,10 @@ import java.util.stream.Stream;
  * {@code rename / renameFile}.</p>
  *
  * <p>Every method returns a safe default on failure — never throws a checked
- * exception.</p>
+ * exception. Best-effort operations (individual file deletions, per-file
+ * size lookups during a directory walk) log a warning via
+ * {@link Trace#warn(String, String)} when a sub-operation fails but the
+ * overall operation can continue.</p>
  */
 public final class FileIO {
 
@@ -121,7 +125,10 @@ public final class FileIO {
         List<String> names = new ArrayList<>();
         try (var stream = Files.list(Path.of(directory))) {
             stream.filter(Files::isRegularFile)
-                    .forEach(p -> names.add(p.getFileName().toString()));
+                    .forEach(p -> {
+                        Path name = p.getFileName();
+                        if (name != null) names.add(name.toString());
+                    });
         } catch (IOException e) {
             Logger.error("Cannot list files in " + directory);
         }
@@ -160,7 +167,12 @@ public final class FileIO {
             walk.sorted(Comparator.reverseOrder()).forEach(p -> {
                 try {
                     Files.deleteIfExists(p);
-                } catch (IOException ignored) {}
+                } catch (IOException e) {
+                    // Best-effort: log and continue so the rest of the tree can be
+                    // deleted. The caller will see a partial result rather than a
+                    // single opaque failure.
+                    Trace.warn("file", "deleteDirectory: cannot delete " + p + ": " + e.getMessage());
+                }
             });
             return true;
         } catch (IOException e) {
@@ -195,7 +207,12 @@ public final class FileIO {
             for (Path p : walk.filter(Files::isRegularFile).toList()) {
                 try {
                     total += Files.size(p);
-                } catch (IOException ignored) {}
+                } catch (IOException e) {
+                    // Best-effort: a file that vanished mid-walk or is unreadable
+                    // contributes 0 to the total; log so the user knows the number
+                    // may be slightly low.
+                    Trace.warn("file", "directorySize: cannot size " + p + ": " + e.getMessage());
+                }
             }
             return total;
         } catch (IOException e) {
@@ -208,7 +225,10 @@ public final class FileIO {
         List<String> names = new ArrayList<>();
         try (var stream = Files.list(Path.of(directory))) {
             stream.filter(Files::isDirectory)
-                    .forEach(p -> names.add(p.getFileName().toString()));
+                    .forEach(p -> {
+                        Path name = p.getFileName();
+                        if (name != null) names.add(name.toString());
+                    });
         } catch (IOException e) {
             Logger.error("Cannot list " + directory);
         }
@@ -233,7 +253,10 @@ public final class FileIO {
         PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + glob);
         try (Stream<Path> walk = Files.walk(Path.of(directory))) {
             walk.filter(Files::isRegularFile)
-                    .filter(p -> matcher.matches(p.getFileName()))
+                    .filter(p -> {
+                        Path name = p.getFileName();
+                        return name != null && matcher.matches(name);
+                    })
                     .forEach(p -> result.add(p.toString()));
         } catch (IOException e) {
             Logger.error("Cannot walk " + directory);
@@ -262,9 +285,11 @@ public final class FileIO {
         try (Stream<Path> walk = Files.walk(src)) {
             for (Path p : walk.toList()) {
                 Path target = dst.resolve(src.relativize(p).toString());
-                if (Files.isDirectory(p)) Files.createDirectories(target);
-                else {
-                    Files.createDirectories(target.getParent());
+                if (Files.isDirectory(p)) {
+                    Files.createDirectories(target);
+                } else {
+                    Path parent = target.getParent();
+                    if (parent != null) Files.createDirectories(parent);
                     Files.copy(p, target, StandardCopyOption.REPLACE_EXISTING);
                 }
             }
@@ -308,7 +333,7 @@ public final class FileIO {
     public static String dirOf(String path) { return directoryOf(path); }
     public static String parentOf(String path) { return directoryOf(path); }
 
-    // ============================================================== new: environment
+    // ============================================================== environment
 
     /** Current working directory. */
     public static String workingDir() {
@@ -350,7 +375,7 @@ public final class FileIO {
     }
     public static String tempDirCreate() { return tempDirectory(); }
 
-    // ============================================================== new: touch
+    // ============================================================== touch
 
     /** Creates an empty file if it does not exist. */
     public static boolean touch(String path) {

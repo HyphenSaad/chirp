@@ -18,6 +18,11 @@ import java.time.Instant;
  *
  * <p>Applications do not use this class directly. The public entry point is
  * {@link chirp.Chirp#start()}.</p>
+ *
+ * <p><b>Synchronization:</b> state transitions and shutdown are serialised on
+ * a private {@link #LIFECYCLE_LOCK}. Using the class's intrinsic lock (a
+ * static synchronized method) would expose the class object to any code that
+ * also calls {@code synchronized (ChirpLifecycle.class)}.</p>
  */
 public final class ChirpLifecycle {
 
@@ -44,6 +49,9 @@ public final class ChirpLifecycle {
                 https://github.com/hyphensaad/chirp
             """;
 
+    /** Private lock — serializes lifecycle transitions without exposing the class monitor. */
+    private static final Object LIFECYCLE_LOCK = new Object();
+
     private static volatile State state = State.UNSTARTED;
     private static volatile StartupConfig config;
     private static volatile Instant startedAt;
@@ -54,50 +62,54 @@ public final class ChirpLifecycle {
 
     // ------------------------------------------------------------- start
 
-    public static synchronized void start(StartupConfig cfg) {
-        if (state == State.STARTED) {
-            Trace.warn("config", "Chirp is already started; ignoring second start()");
-            return;
-        }
-        if (state == State.STARTING) return;
+    public static void start(StartupConfig cfg) {
+        synchronized (LIFECYCLE_LOCK) {
+            if (state == State.STARTED) {
+                Trace.warn("config", "Chirp is already started; ignoring second start()");
+                return;
+            }
+            if (state == State.STARTING) return;
 
-        state = State.STARTING;
-        try {
-            config = cfg != null ? cfg : StartupConfig.defaults();
-
-            applyGlyphStyle(config);
-            applyColor(config);
-            applyStrictWarnings(config);
-            applyTrace(config);
-            applyConsoleMessages(config);
-
-            permitDuringStartup = true;
+            state = State.STARTING;
             try {
-                if (config.showHeader()) {
-                    Banner.print(config);
-                } else if (config.clearScreen()) {
-                    try {
-                        chirp.console.Console.clearScreenInternal();
-                    } catch (Exception ignored) {}
+                config = cfg != null ? cfg : StartupConfig.defaults();
+
+                applyGlyphStyle(config);
+                applyColor(config);
+                applyStrictWarnings(config);
+                applyTrace(config);
+                applyConsoleMessages(config);
+
+                permitDuringStartup = true;
+                try {
+                    if (config.showHeader()) {
+                        Banner.print(config);
+                    } else if (config.clearScreen()) {
+                        try {
+                            chirp.console.Console.clearScreenInternal();
+                        } catch (RuntimeException e) {
+                            Trace.warn("config", "clearScreen failed: " + e.getMessage());
+                        }
+                    }
+                } finally {
+                    permitDuringStartup = false;
                 }
-            } finally {
-                permitDuringStartup = false;
-            }
 
-            if (flag("chirp.stats", config.stats())) {
-                Stats.enable();
-                sampler = new StatsSampler(config.sampleIntervalMs());
-                sampler.start();
-            } else {
-                Stats.disable();
-            }
+                if (flag("chirp.stats", config.stats())) {
+                    Stats.enable();
+                    sampler = new StatsSampler(config.sampleIntervalMs());
+                    sampler.start();
+                } else {
+                    Stats.disable();
+                }
 
-            startedAt = Instant.now();
-            state = State.STARTED;
-            Trace.info("config", "Chirp started successfully");
-        } catch (RuntimeException e) {
-            state = State.UNSTARTED;
-            throw e;
+                startedAt = Instant.now();
+                state = State.STARTED;
+                Trace.info("config", "Chirp started successfully");
+            } catch (RuntimeException e) {
+                state = State.UNSTARTED;
+                throw e;
+            }
         }
     }
 
@@ -167,13 +179,15 @@ public final class ChirpLifecycle {
      * Gracefully stops the sampler thread and resets lifecycle. Used by tests
      * between classes; applications normally never call it.
      */
-    public static synchronized void shutdown() {
-        if (sampler != null) {
-            sampler.stop();
-            sampler = null;
+    public static void shutdown() {
+        synchronized (LIFECYCLE_LOCK) {
+            if (sampler != null) {
+                sampler.stop();
+                sampler = null;
+            }
+            Logger.clearConsoleSink();
+            state = State.UNSTARTED;
+            startedAt = null;
         }
-        Logger.clearConsoleSink();
-        state = State.UNSTARTED;
-        startedAt = null;
     }
 }

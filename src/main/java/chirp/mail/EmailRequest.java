@@ -3,6 +3,7 @@ package chirp.mail;
 import chirp.console.Console;
 import chirp.console.Loader;
 import chirp.internal.Logger;
+import chirp.internal.Trace;
 import chirp.session.Session;
 import chirp.text.Check;
 
@@ -38,6 +39,12 @@ import java.util.UUID;
  * {@code passwordFromEnv / envPassword};
  * {@code send / deliver / dispatch}; {@code sendOrThrow / deliverOrThrow};
  * {@code preview / mimeMessage / asMime}.</p>
+ *
+ * <h2>Listener exception policy</h2>
+ * <p>{@link EmailListener} callbacks are best-effort: a broken listener
+ * must never break the send. Exceptions from listeners are logged via
+ * {@link Trace#warn(String, String)} so they surface when tracing is
+ * enabled, and are otherwise ignored.</p>
  */
 public final class EmailRequest {
 
@@ -256,7 +263,7 @@ public final class EmailRequest {
         try {
             byte[] data = Files.readAllBytes(p);
             attachments.add(new Attachment(p.getFileName().toString(), data));
-        } catch (Exception e) {
+        } catch (java.io.IOException e) {
             throw new EmailException(EmailException.Reason.TRANSPORT,
                     "Cannot read attachment: " + path, e);
         }
@@ -293,7 +300,7 @@ public final class EmailRequest {
         }
         try (var stream = Files.list(dir)) {
             stream.filter(Files::isRegularFile).forEach(p -> attach(p.toString()));
-        } catch (Exception e) {
+        } catch (java.io.IOException e) {
             throw new EmailException(EmailException.Reason.TRANSPORT,
                     "Cannot read directory: " + path, e);
         }
@@ -376,9 +383,7 @@ public final class EmailRequest {
         try {
             validate();
 
-            if (listener != null) try {
-                listener.onStart(this);
-            } catch (Exception ignored) {}
+            notifyStart();
 
             String resolvedPassword = resolvePassword();
             String resolvedUsername = resolveUsername();
@@ -389,9 +394,7 @@ public final class EmailRequest {
                         "Dry run — message built, not sent",
                         System.currentTimeMillis() - start,
                         rawMessage, allRecipients(), List.of());
-                if (listener != null) try {
-                    listener.onComplete(r);
-                } catch (Exception ignored) {}
+                notifyComplete(r);
                 return r;
             }
 
@@ -399,9 +402,7 @@ public final class EmailRequest {
                 loader = Loader.start("Sending email to " + allRecipients().size() + " recipient(s)");
             }
 
-            if (listener != null) try {
-                listener.onConnect(host, port);
-            } catch (Exception ignored) {}
+            notifyConnect();
 
             List<String> smtpLog = new ArrayList<>();
             SmtpClient client = new SmtpClient(host, port, ssl, starttls,
@@ -411,9 +412,7 @@ public final class EmailRequest {
             try {
                 client.send(from, allRecipients(), rawMessage);
             } finally {
-                if (listener != null) try {
-                    listener.onDisconnect();
-                } catch (Exception ignored) {}
+                notifyDisconnect();
             }
 
             if (loader != null) loader.success("Email sent");
@@ -422,29 +421,19 @@ public final class EmailRequest {
                     "Sent to " + allRecipients().size() + " recipient(s)",
                     System.currentTimeMillis() - start,
                     rawMessage, allRecipients(), List.copyOf(smtpLog));
-            if (listener != null) {
-                try {
-                    listener.onDelivered(r);
-                } catch (Exception ignored) {}
-                try {
-                    listener.onComplete(r);
-                } catch (Exception ignored) {}
-            }
+            notifyDelivered(r);
+            notifyComplete(r);
             return r;
 
         } catch (EmailException e) {
             if (loader != null) loader.error(e.getMessage());
-            if (listener != null) try {
-                listener.onError(e);
-            } catch (Exception ignored) {}
+            notifyError(e);
             if (throwOnFailure) throw e;
             return new EmailResult(false, e.getMessage(),
                     System.currentTimeMillis() - start, "", allRecipients(), List.of());
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             if (loader != null) loader.error(e.getMessage());
-            if (listener != null) try {
-                listener.onError(e);
-            } catch (Exception ignored) {}
+            notifyError(e);
             if (throwOnFailure) throw new EmailException("Send failed: " + e.getMessage(), e);
             return new EmailResult(false, "Send failed: " + e.getMessage(),
                     System.currentTimeMillis() - start, "", allRecipients(), List.of());
@@ -472,9 +461,7 @@ public final class EmailRequest {
             last = send();
             if (last.isSuccess()) return last;
             if (i < maxAttempts) {
-                if (listener != null) try {
-                    listener.onRetry(i, new EmailException(last.message()));
-                } catch (Exception ignored) {}
+                notifyRetry(i, new EmailException(last.message()));
                 if (!d.isZero()) {
                     try {
                         Thread.sleep(d.toMillis());
@@ -508,6 +495,65 @@ public final class EmailRequest {
         }
     }
 
+    // ============================================================== listener notifications
+
+    private void notifyStart() {
+        if (listener == null) return;
+        try {
+            listener.onStart(this);
+        } catch (RuntimeException e) {
+            Trace.warn("email", "onStart listener threw: " + e.getMessage());
+        }
+    }
+    private void notifyConnect() {
+        if (listener == null) return;
+        try {
+            listener.onConnect(host, port);
+        } catch (RuntimeException e) {
+            Trace.warn("email", "onConnect listener threw: " + e.getMessage());
+        }
+    }
+    private void notifyDisconnect() {
+        if (listener == null) return;
+        try {
+            listener.onDisconnect();
+        } catch (RuntimeException e) {
+            Trace.warn("email", "onDisconnect listener threw: " + e.getMessage());
+        }
+    }
+    private void notifyDelivered(EmailResult r) {
+        if (listener == null) return;
+        try {
+            listener.onDelivered(r);
+        } catch (RuntimeException e) {
+            Trace.warn("email", "onDelivered listener threw: " + e.getMessage());
+        }
+    }
+    private void notifyComplete(EmailResult r) {
+        if (listener == null) return;
+        try {
+            listener.onComplete(r);
+        } catch (RuntimeException e) {
+            Trace.warn("email", "onComplete listener threw: " + e.getMessage());
+        }
+    }
+    private void notifyError(Exception error) {
+        if (listener == null) return;
+        try {
+            listener.onError(error);
+        } catch (RuntimeException e) {
+            Trace.warn("email", "onError listener threw: " + e.getMessage());
+        }
+    }
+    private void notifyRetry(int attempt, Exception cause) {
+        if (listener == null) return;
+        try {
+            listener.onRetry(attempt, cause);
+        } catch (RuntimeException e) {
+            Trace.warn("email", "onRetry listener threw: " + e.getMessage());
+        }
+    }
+
     // ============================================================== SMTP connectivity test
 
     /**
@@ -519,7 +565,7 @@ public final class EmailRequest {
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(host, port), (int) timeout.toMillis());
             return true;
-        } catch (Exception e) {
+        } catch (java.io.IOException e) {
             return false;
         }
     }
@@ -590,7 +636,8 @@ public final class EmailRequest {
             try {
                 return EnvLoader.get(usernameEnvPath, usernameEnvKey);
             } catch (EmailException e) {
-                return username; // fallback to explicit
+                Trace.warn("email", "usernameFromEnv failed, falling back to explicit username: " + e.getMessage());
+                return username;
             }
         }
         return username;
@@ -599,7 +646,12 @@ public final class EmailRequest {
     private void warnDirectPassword() {
         try {
             Console.warn("DIRECT password is discouraged — consider ENV or PROMPT");
-        } catch (Exception ignored) { /* before start */ }
+        } catch (chirp.ChirpNotStartedException e) {
+            // Before Chirp.start() — that's fine, warnDirectPassword is a hint.
+            Trace.debug("email", "Console not started yet; skipping DIRECT-password warning");
+        } catch (RuntimeException e) {
+            Trace.warn("email", "DIRECT-password warning failed: " + e.getMessage());
+        }
     }
 
     private String promptForPassword() {
@@ -608,10 +660,12 @@ public final class EmailRequest {
                     ? null
                     : System.console().readPassword("SMTP password: ");
             if (chars != null) return new String(chars).trim();
-        } catch (Exception ignored) {}
+        } catch (RuntimeException e) {
+            Trace.warn("email", "console.readPassword failed, falling back to stdin: " + e.getMessage());
+        }
         try {
             return chirp.console.Input.readRaw("SMTP password").trim();
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             throw EmailException.missingConfig("Cannot prompt for password: " + e.getMessage());
         }
     }
