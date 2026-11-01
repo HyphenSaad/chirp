@@ -22,13 +22,12 @@ import java.util.Locale;
  * <p><strong>Internal API.</strong> Students use {@link Email}.</p>
  *
  * <h2>Resource management</h2>
- * <p>The socket owns the connection. Readers and writers wrapping its
- * streams do not need to be closed separately — closing the socket is
- * sufficient and safe on every path, including the STARTTLS upgrade
- * where the reader/writer are re-created on the upgraded stream. A
- * try-with-resources wraps the socket so it is closed even on exception.
- * PMD's CloseResource and UseTryWithResources rules are satisfied by the
- * socket-level try-with-resources.</p>
+ * <p>The raw socket is managed by the outer try-with-resources. On the STARTTLS
+ * path, the layered SSL socket is opened in its own nested try-with-resources
+ * with {@code autoClose=true}, so closing it also closes the underlying raw
+ * socket. The {@link BufferedReader} and {@link PrintWriter} wrapping each
+ * socket's streams are closed transitively by their socket's close — this is
+ * why they are not themselves in a try-with-resources.</p>
  */
 final class SmtpClient {
 
@@ -56,15 +55,10 @@ final class SmtpClient {
         this.log = log;
     }
 
+    @SuppressWarnings("PMD.CloseResource") // BufferedReader/Writer wrap the socket's streams; closing the socket closes them.
     void send(String from, List<String> to, String rawMessage) throws IOException {
-        // try-with-resources on the socket ensures it is closed on every
-        // exception path. The reader/writer wrapping its streams do not
-        // need separate try-with-resources — closing the socket is what
-        // the reader/writer's own close() would ultimately do, and the
-        // STARTTLS upgrade path would break if we closed them independently.
         try (Socket socket = openSocket()) {
             socket.setSoTimeout(TIMEOUT_MS);
-
             BufferedReader in = newReader(socket);
             PrintWriter out = newWriter(socket);
 
@@ -78,37 +72,20 @@ final class SmtpClient {
                 if (!supportsTls) throw new IOException("Server does not advertise STARTTLS");
                 command(out, "STARTTLS");
                 expect(in, 220);
-                // Reopen reader/writer on the upgraded stream — the old ones
-                // wrap the pre-upgrade socket and are discarded. The outer
-                // try-with-resources still owns the socket lifetime.
-                Socket upgraded = upgradeToSsl(socket);
-                socket = upgraded;
-                in = newReader(socket);
-                out = newWriter(socket);
-                command(out, "EHLO " + localHostname());
-                expect(in, 250);
+
+                // Layered SSL socket — created with autoClose=true, so closing
+                // this socket closes the wrapped raw socket too. The outer
+                // try-with-resources' socket.close() is then a harmless no-op.
+                try (Socket upgraded = upgradeToSsl(socket)) {
+                    BufferedReader upgradedIn = newReader(upgraded);
+                    PrintWriter upgradedOut = newWriter(upgraded);
+                    command(upgradedOut, "EHLO " + localHostname());
+                    expect(upgradedIn, 250);
+                    conversation(from, to, rawMessage, upgradedIn, upgradedOut);
+                }
+            } else {
+                conversation(from, to, rawMessage, in, out);
             }
-
-            if (username != null && password != null) {
-                authenticate(out, in);
-            }
-
-            command(out, "MAIL FROM:<" + from + ">");
-            expect(in, 250);
-
-            for (String recipient : to) {
-                command(out, "RCPT TO:<" + recipient + ">");
-                expectAny(in, 250, 251);
-            }
-
-            command(out, "DATA");
-            expect(in, 354);
-            writeData(out, rawMessage);
-            command(out, ".");
-            expect(in, 250);
-
-            command(out, "QUIT");
-            // 221 usually, but be lenient
         }
     }
 
@@ -118,6 +95,32 @@ final class SmtpClient {
             return f.createSocket(host, port);
         }
         return new Socket(host, port);
+    }
+
+    // ---------------------------------------------------- conversation
+
+    private void conversation(String from, List<String> to, String rawMessage,
+            BufferedReader in, PrintWriter out) throws IOException {
+        if (username != null && password != null) {
+            authenticate(out, in);
+        }
+
+        command(out, "MAIL FROM:<" + from + ">");
+        expect(in, 250);
+
+        for (String recipient : to) {
+            command(out, "RCPT TO:<" + recipient + ">");
+            expectAny(in, 250, 251);
+        }
+
+        command(out, "DATA");
+        expect(in, 354);
+        writeData(out, rawMessage);
+        command(out, ".");
+        expect(in, 250);
+
+        command(out, "QUIT");
+        // 221 usually, but be lenient
     }
 
     // ---------------------------------------------------- auth
