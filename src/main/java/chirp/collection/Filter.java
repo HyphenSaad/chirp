@@ -185,9 +185,11 @@ public final class Filter {
      */
     public record Split<T>(List<T> matching, List<T> nonMatching) {
         public Split {
-            matching = matching == null ? List.of()
+            matching = matching == null
+                    ? List.of()
                     : Collections.unmodifiableList(new ArrayList<>(matching));
-            nonMatching = nonMatching == null ? List.of()
+            nonMatching = nonMatching == null
+                    ? List.of()
                     : Collections.unmodifiableList(new ArrayList<>(nonMatching));
         }
         public List<T> matchingItems() { return matching; }
