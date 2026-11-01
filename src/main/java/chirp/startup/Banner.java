@@ -4,34 +4,99 @@ import chirp.internal.Ansi;
 import chirp.internal.Glyphs;
 
 /**
- * Startup header — box-bounded TUI-style banner with version and link.
+ * The startup banner — a box-bounded TUI-style header printed by
+ * {@link ChirpLifecycle#start(StartupConfig)}.
  *
- * <p>Every visible line is exactly the same width, and the total width is
- * computed from the longest line so the box never breaks. Uses
- * {@link Glyphs} for box-drawing characters so the same banner renders in
- * unicode-fancy, unicode-basic, and plain-ASCII modes without breaking
- * alignment.</p>
+ * <p>Renders the library name, version, link, and author in a Unicode
+ * box that automatically adapts to the terminal's Unicode support.
+ * Every visible line is exactly the same width, and the total width is
+ * computed from the longest content line so the box never breaks, even
+ * when a custom header text is supplied.</p>
+ *
+ * <h2>Example — the default banner</h2>
+ * <pre>
+ * ╭────────────────────────────────────────────╮
+ * │                                            │
+ * │             C H I R P                      │
+ * │                                            │
+ * │         A friendly Java toolkit            │
+ * │                                            │
+ * │   v1.0.0 | github.com/hyphensaad/chirp     │
+ * │   Saad Mansoor (HyphenSaad)                │
+ * │                                            │
+ * ╰────────────────────────────────────────────╯
+ * </pre>
+ *
+ * <p>(Rendered with ASCII fallback in a non-Unicode terminal — same
+ * layout, different glyphs.)</p>
+ *
+ * <h2>Customisation</h2>
+ * <p>The banner respects three configuration fields from
+ * {@link StartupConfig}:</p>
+ * <ul>
+ *   <li>{@link StartupConfig#showHeader()} — print the banner at all</li>
+ *   <li>{@link StartupConfig#headerText()} — replace the default
+ *       "A friendly Java toolkit" subtitle</li>
+ *   <li>{@link StartupConfig#unicodePreferred()} — use Unicode box
+ *       glyphs vs ASCII</li>
+ * </ul>
+ *
+ * <h2>Related</h2>
+ * <p>For the full startup sequence, see
+ * {@link ChirpLifecycle#start(StartupConfig)}. For the configuration
+ * object, see {@link StartupConfig}.</p>
+ *
+ * @see StartupConfig
+ * @see ChirpLifecycle#start(StartupConfig)
+ * @since 1.0.0
  */
 public final class Banner {
 
+    /** The library version. */
     public static final String VERSION = "1.0.0";
+
+    /** The GitHub repository URL. */
     public static final String GITHUB = "github.com/hyphensaad/chirp";
+
+    /** The author attribution. */
     public static final String AUTHOR = "Saad Mansoor (HyphenSaad)";
 
     private static final String SEPARATOR = " | ";
 
     private Banner() {}
 
+    /**
+     * Clears the screen (if configured) and prints the rendered banner
+     * to {@code System.out}. Called by
+     * {@link ChirpLifecycle#start(StartupConfig)} — students never
+     * invoke this directly.
+     *
+     * @param config the startup configuration (null → clear screen)
+     * @see #render(StartupConfig)
+     * @since 1.0.0
+     */
     public static void print(StartupConfig config) {
         if (config == null || config.clearScreen()) {
             try {
                 chirp.console.Console.clearScreenInternal();
-            } catch (Exception ignored) {}
+            } catch (RuntimeException ignored) {}
         }
         System.out.print(render(config));
         System.out.flush();
     }
 
+    /**
+     * Renders the banner as a string without printing it. Useful for
+     * tests and for embedding the banner in custom output.
+     *
+     * <p>The returned string starts and ends with a blank line so that
+     * it composes cleanly with surrounding output.</p>
+     *
+     * @param config the startup configuration (null → {@code "Welcome!"} subtitle)
+     * @return the rendered banner
+     * @see #print(StartupConfig)
+     * @since 1.0.0
+     */
     public static String render(StartupConfig config) {
         String subtitle = (config != null
                 && config.headerText() != null

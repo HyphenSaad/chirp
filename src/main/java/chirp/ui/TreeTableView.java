@@ -6,14 +6,24 @@ import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeTableColumn;
 
 /**
- * Hierarchical table — a tree where each level also renders as a table row.
+ * Hierarchical table — a tree where each level also renders as a table
+ * row.
  *
+ * <h2>Example</h2>
  * <pre>{@code
- * TreeTableView tt = TreeTableView.of("Root")
+ * TreeTableView.of("Root")
  *     .add("Sales", "2024")
  *     .add("Sales", "2025")
  *     .add("Marketing", "Content");
  * }</pre>
+ *
+ * <h2>Related</h2>
+ * <p>For a flat table, see {@link Table}. For a tree without extra
+ * columns, see {@link TreeView}.</p>
+ *
+ * @see Table
+ * @see TreeView
+ * @since 1.0.0
  */
 public class TreeTableView extends javafx.scene.control.TreeTableView<String> {
 
@@ -28,6 +38,14 @@ public class TreeTableView extends javafx.scene.control.TreeTableView<String> {
         getColumns().add(col);
     }
 
+    /**
+     * Creates a tree table with the given root label. The root is
+     * expanded by default.
+     *
+     * @param rootLabel the root label (null → "Root")
+     * @return a new tree table
+     * @since 1.0.0
+     */
     public static TreeTableView of(String rootLabel) {
         TreeTableView tv = new TreeTableView();
         TreeItem<String> root = new TreeItem<>(rootLabel == null ? "Root" : rootLabel);
@@ -36,6 +54,14 @@ public class TreeTableView extends javafx.scene.control.TreeTableView<String> {
         return tv;
     }
 
+    /**
+     * Inserts a path of segments. Missing intermediate nodes are created.
+     * Duplicate segments under the same parent are merged.
+     *
+     * @param path the path (null → no-op)
+     * @return this tree table, for chaining
+     * @since 1.0.0
+     */
     public TreeTableView add(String... path) {
         if (path == null) return this;
         TreeItem<String> current = getRoot();
@@ -51,10 +77,38 @@ public class TreeTableView extends javafx.scene.control.TreeTableView<String> {
         return this;
     }
 
+    /**
+     * Expands every node.
+     *
+     * @return this tree table
+     * @since 1.0.0
+     */
     public TreeTableView expandAll() { expandRec(getRoot()); return this; }
+
+    /**
+     * Sets the table height — both preferred and minimum.
+     *
+     * @param h the height in pixels
+     * @return this tree table
+     * @since 1.0.0
+     */
     public TreeTableView height(double h) { setPrefHeight(h); setMinHeight(h); return this; }
+
+    /**
+     * Makes the table fill the available horizontal space.
+     *
+     * @return this tree table
+     * @since 1.0.0
+     */
     public TreeTableView fullWidth() { setMaxWidth(Double.MAX_VALUE); return this; }
 
+    /**
+     * Registers a listener for selection changes.
+     *
+     * @param consumer the listener (null → no-op)
+     * @return this tree table
+     * @since 1.0.0
+     */
     public TreeTableView onChange(Consumer<String> consumer) {
         if (consumer != null) {
             getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {

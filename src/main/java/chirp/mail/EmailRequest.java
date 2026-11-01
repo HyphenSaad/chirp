@@ -25,33 +25,138 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Fluent email request. Every setter returns {@code this}; call
- * {@link #send()} (graceful) or {@link #sendOrThrow()} (throws on failure)
- * to dispatch.
+ * Fluent email request — configure once, send once.
  *
- * <h2>Naming</h2>
- * <p>Every method has 2–4 aliases. {@code host / server / smtpHost / mailServer};
- * {@code from / sender / fromAddress}; {@code to / recipient / addRecipient};
- * {@code subject / title}; {@code text / body / plain / bodyText};
- * {@code html / htmlBody / bodyHtml}; {@code template / htmlTemplate};
- * {@code attach / attachFile / includeFile};
- * {@code password / withPassword}; {@code promptPassword / askPassword};
- * {@code passwordFromEnv / envPassword};
- * {@code send / deliver / dispatch}; {@code sendOrThrow / deliverOrThrow};
- * {@code preview / mimeMessage / asMime}.</p>
+ * <p>Every configuration method returns {@code this}, so a request is
+ * configured by chaining, then dispatched with {@link #send()} or one of
+ * its variants. A request is <b>mutable</b> — reusing the same builder
+ * for two sends reuses the accumulated configuration.</p>
  *
- * <h2>Listener exception policy</h2>
- * <p>{@link EmailListener} callbacks are best-effort: a broken listener
- * must never break the send. Exceptions from listeners are logged via
- * {@link Trace#warn(String, String)} so they surface when tracing is
- * enabled, and are otherwise ignored.</p>
+ * <h2>The typical send</h2>
+ * <pre>{@code
+ * EmailResult result = Email.builder()
+ *     .host("smtp.gmail.com")                    // server
+ *     .from("me@gmail.com")                      // sender
+ *     .to("you@example.com")                     // recipient(s)
+ *     .subject("Hello")                          // subject
+ *     .text("Hi there!")                         // body
+ *     .passwordFromEnv(".env", "SMTP_PASSWORD")  // credentials
+ *     .send();
  *
- * <h2>Transport errors</h2>
- * <p>{@link SmtpClient#send} declares {@code throws IOException}. It is
- * caught at the call site and rethrown as {@link EmailException} with
- * {@link EmailException.Reason#TRANSPORT}, so the caller sees a single
- * failure category regardless of whether the problem was DNS, TLS, or
- * SMTP-level rejection.</p>
+ * if (result.isSuccess()) {
+ *     System.out.println("Sent in " + result.durationMs() + "ms");
+ * } else {
+ *     System.out.println("Failed: " + result.message());
+ * }
+ * }</pre>
+ *
+ * <h2>The four ways to send</h2>
+ * <table border="1">
+ *   <caption>Choose a send variant based on your error-handling style</caption>
+ *   <tr><th>Method</th><th>On failure</th><th>Use when</th></tr>
+ *   <tr><td>{@link #send()}</td>
+ *       <td>Returns an {@link EmailResult} with {@code success=false}</td>
+ *       <td>Standard — the caller checks the result</td></tr>
+ *   <tr><td>{@link #sendOrThrow()}</td>
+ *       <td>Throws {@link EmailException}</td>
+ *       <td>Inside a stream pipeline or a method that can't return
+ *           an error value</td></tr>
+ *   <tr><td>{@link #sendWithRetry(int)}</td>
+ *       <td>Retries then returns the last result</td>
+ *       <td>Transient network conditions</td></tr>
+ *   <tr><td>{@link #previewMimeMessage()}</td>
+ *       <td>Throws on config error, otherwise returns the MIME</td>
+ *       <td>Dry-run / debugging — never touches the network</td></tr>
+ * </table>
+ *
+ * <h2>Password strategies</h2>
+ * <p>See {@link PasswordStrategy} for the full comparison. In order of
+ * preference:</p>
+ * <ol>
+ *   <li>{@link #passwordFromEnv(String, String) ENV} — read from a
+ *       {@code .env} file (recommended)</li>
+ *   <li>{@link #promptPassword() PROMPT} — ask the user at send time</li>
+ *   <li>{@link #password(String) DIRECT} — in source code (discouraged;
+ *       prints a warning)</li>
+ * </ol>
+ *
+ * <h2>Attachments</h2>
+ * <p>Use {@link #attach(String)} for a single file,
+ * {@link #attachMany(List)} for several paths, or
+ * {@link #attachDirectory(String)} for every regular file in a
+ * directory. The MIME message is automatically built as
+ * {@code multipart/mixed} when attachments are present. The filename
+ * in the {@code Content-Disposition} header preserves the source file's
+ * name; the path is not exposed.</p>
+ *
+ * <h2>HTML vs plain text</h2>
+ * <p>If you set both {@link #text(String)} and {@link #html(String)},
+ * the MIME message is built as {@code multipart/alternative} with both
+ * parts — the recipient's email client chooses which to display (most
+ * modern clients prefer HTML). If you set only one, the message is a
+ * single-part {@code text/plain} or {@code text/html}.</p>
+ *
+ * <p>{@link #template(String)} (or {@link #htmlTemplate(HtmlTemplate)})
+ * is a convenient way to load an HTML template from a file and render
+ * it with placeholders — see {@link HtmlTemplate} for the placeholder
+ * syntax.</p>
+ *
+ * <h2>Signatures</h2>
+ * <p>{@link #signature(String)} appends a fixed signature to the body.
+ * {@link #signatureFromSession()} builds a signature from the
+ * {@link chirp.session.Session} — the student's name, roll number,
+ * degree, and email. It is empty before any Session fields are set.</p>
+ *
+ * <h2>Listener notifications</h2>
+ * <p>Attach a listener with {@link #listener(EmailListener)} to observe
+ * the send lifecycle. See {@link EmailListener} for the full hook list.
+ * Listener exceptions are logged and swallowed — a broken listener never
+ * breaks the send.</p>
+ *
+ * <h2>Retries</h2>
+ * <p>{@link #sendWithRetry(int)} retries on any failure, waiting 500ms
+ * between attempts. Use {@link #sendWithRetry(int, Duration)} for a
+ * custom delay. To distinguish retryable from non-retryable failures,
+ * use {@link #sendOrThrow()} and check
+ * {@link EmailException#isTransportError()}.</p>
+ *
+ * <h2>Dry run — the "did I configure this correctly?" mode</h2>
+ * <p>{@link #dryRun(boolean)} (or {@link #preview()}) builds the full
+ * MIME message but does <b>not</b> connect to the SMTP server. Use it
+ * to check that the configuration is complete, then call
+ * {@link #send()} for the real send:</p>
+ * <pre>{@code
+ * EmailResult preview = Email.builder()
+ *     .host("smtp.gmail.com")
+ *     .from("me@gmail.com")
+ *     .to("you@example.com")
+ *     .subject("Hello")
+ *     .text("Hi!")
+ *     .passwordFromEnv(".env", "SMTP_PASSWORD")
+ *     .preview()
+ *     .send();
+ *
+ * if (preview.isSuccess()) {
+ *     System.out.println("Configuration OK");
+ *     System.out.println(preview.rawMessage());   // inspect the MIME
+ * }
+ * }</pre>
+ *
+ * <h2>Related</h2>
+ * <p>For the facade that opens builders, see {@link Email}. For the
+ * outcome record, see {@link EmailResult}. For the exception, see
+ * {@link EmailException}. For the .env reader, see {@link EnvLoader}.
+ * For the template engine, see {@link HtmlTemplate}.</p>
+ *
+ * @see Email
+ * @see EmailResult
+ * @see EmailException
+ * @see EmailListener
+ * @see PasswordStrategy
+ * @see EnvLoader
+ * @see HtmlTemplate
+ * @see SmtpClient
+ * @since 1.0.0
  */
 public final class EmailRequest {
 
@@ -105,137 +210,846 @@ public final class EmailRequest {
 
     // ============================================================== getters (for tests)
 
+    /**
+     * Returns the configured SMTP host, or null if not set.
+     *
+     * @return the host, or null
+     * @since 1.0.0
+     */
     public String host() { return host; }
+
+    /**
+     * Returns the configured SMTP port, or {@code -1} if not set
+     * (which means "pick the default for the transport").
+     *
+     * @return the port, or -1
+     * @since 1.0.0
+     */
     public int port() { return port; }
+
+    /**
+     * Checks whether implicit TLS (SMTPS) is enabled.
+     *
+     * @return true if SSL is enabled
+     * @since 1.0.0
+     */
     public boolean ssl() { return ssl; }
+
+    /**
+     * Checks whether STARTTLS upgrade is enabled.
+     *
+     * @return true if STARTTLS is enabled
+     * @since 1.0.0
+     */
     public boolean starttls() { return starttls; }
+
+    /**
+     * Returns the configured sender address, or null.
+     *
+     * @return the sender, or null
+     * @since 1.0.0
+     */
     public String from() { return from; }
+
+    /**
+     * Returns an unmodifiable copy of the recipient list.
+     *
+     * @return the To recipients
+     * @since 1.0.0
+     */
     public List<String> to() { return List.copyOf(to); }
+
+    /**
+     * Returns an unmodifiable copy of the CC list.
+     *
+     * @return the CC recipients
+     * @since 1.0.0
+     */
     public List<String> cc() { return List.copyOf(cc); }
+
+    /**
+     * Returns an unmodifiable copy of the BCC list.
+     *
+     * @return the BCC recipients
+     * @since 1.0.0
+     */
     public List<String> bcc() { return List.copyOf(bcc); }
+
+    /**
+     * Returns the configured subject, or empty string.
+     *
+     * @return the subject
+     * @since 1.0.0
+     */
     public String subject() { return subject; }
+
+    /**
+     * Returns the plain-text body, or null.
+     *
+     * @return the text body, or null
+     * @since 1.0.0
+     */
     public String text() { return text; }
+
+    /**
+     * Returns the HTML body, or null.
+     *
+     * @return the HTML body, or null
+     * @since 1.0.0
+     */
     public String html() { return html; }
+
+    /**
+     * Returns the configured password strategy, or null if not yet set.
+     *
+     * @return the strategy, or null
+     * @since 1.0.0
+     */
     public PasswordStrategy strategy() { return strategy; }
+
+    /**
+     * Checks whether dry-run mode is enabled.
+     *
+     * @return true if this is a dry run
+     * @since 1.0.0
+     */
     public boolean dryRun() { return dryRun; }
+
+    /**
+     * Checks whether verbose mode is enabled.
+     *
+     * @return true if verbose
+     * @since 1.0.0
+     */
     public boolean verbose() { return verbose; }
+
+    /**
+     * Returns the attached listener, or null.
+     *
+     * @return the listener, or null
+     * @since 1.0.0
+     */
     public EmailListener listener() { return listener; }
+
+    /**
+     * Returns the configured environment file path for the password, or
+     * null if using a non-ENV strategy.
+     *
+     * @return the .env path, or null
+     * @since 1.0.0
+     */
     public String envPath() { return envPath; }
+
+    /**
+     * Returns the configured environment key for the password, or null
+     * if using a non-ENV strategy.
+     *
+     * @return the .env key, or null
+     * @since 1.0.0
+     */
     public String envKey() { return envKey; }
 
     // ============================================================== SMTP server
 
+    /**
+     * Sets the SMTP server hostname.
+     *
+     * <pre>{@code
+     * Email.builder().host("smtp.gmail.com")
+     * }</pre>
+     *
+     * @param host the hostname
+     * @return this request
+     * @see #server(String)
+     * @see #smtpHost(String)
+     * @see #mailServer(String)
+     * @since 1.0.0
+     */
     public EmailRequest host(String host) { this.host = host; return this; }
+
+    /**
+     * Alias of {@link #host(String)} — see that method for full
+     * documentation and examples.
+     *
+     * @param host the hostname
+     * @return this request
+     * @see #host(String)
+     * @since 1.0.0
+     */
     public EmailRequest server(String host) { return host(host); }
+
+    /**
+     * Alias of {@link #host(String)} — see that method for full
+     * documentation and examples.
+     *
+     * @param host the hostname
+     * @return this request
+     * @see #host(String)
+     * @since 1.0.0
+     */
     public EmailRequest smtpHost(String host) { return host(host); }
+
+    /**
+     * Alias of {@link #host(String)} — see that method for full
+     * documentation and examples.
+     *
+     * @param host the hostname
+     * @return this request
+     * @see #host(String)
+     * @since 1.0.0
+     */
     public EmailRequest mailServer(String host) { return host(host); }
 
+    /**
+     * Sets the SMTP port explicitly. If not set, {@link #send()} picks
+     * 465 when SSL is enabled and 587 otherwise.
+     *
+     * @param port the SMTP port
+     * @return this request
+     * @see #smtpPort(int)
+     * @since 1.0.0
+     */
     public EmailRequest port(int port) { this.port = port; return this; }
+
+    /**
+     * Alias of {@link #port(int)} — see that method for full
+     * documentation.
+     *
+     * @param port the SMTP port
+     * @return this request
+     * @see #port(int)
+     * @since 1.0.0
+     */
     public EmailRequest smtpPort(int port) { return port(port); }
 
+    /**
+     * Enables or disables implicit TLS (SMTPS). When enabled and no
+     * port is set, port 465 is used.
+     *
+     * @param enabled whether to use SSL
+     * @return this request
+     * @see #useSsl()
+     * @see #withSsl()
+     * @see #starttls(boolean)
+     * @since 1.0.0
+     */
     public EmailRequest ssl(boolean enabled) { this.ssl = enabled; return this; }
+
+    /**
+     * Alias of {@link #ssl(boolean)} — see that method for full
+     * documentation.
+     *
+     * @return this request
+     * @see #ssl(boolean)
+     * @since 1.0.0
+     */
     public EmailRequest useSsl() { return ssl(true); }
+
+    /**
+     * Alias of {@link #ssl(boolean)} — see that method for full
+     * documentation.
+     *
+     * @return this request
+     * @see #ssl(boolean)
+     * @since 1.0.0
+     */
     public EmailRequest withSsl() { return ssl(true); }
 
+    /**
+     * Enables or disables STARTTLS upgrade. When enabled and no port is
+     * set, port 587 is used.
+     *
+     * @param enabled whether to use STARTTLS
+     * @return this request
+     * @see #useStarttls()
+     * @see #withStarttls()
+     * @see #ssl(boolean)
+     * @since 1.0.0
+     */
     public EmailRequest starttls(boolean enabled) { this.starttls = enabled; return this; }
+
+    /**
+     * Alias of {@link #starttls(boolean)} — see that method for full
+     * documentation.
+     *
+     * @return this request
+     * @see #starttls(boolean)
+     * @since 1.0.0
+     */
     public EmailRequest useStarttls() { return starttls(true); }
+
+    /**
+     * Alias of {@link #starttls(boolean)} — see that method for full
+     * documentation.
+     *
+     * @return this request
+     * @see #starttls(boolean)
+     * @since 1.0.0
+     */
     public EmailRequest withStarttls() { return starttls(true); }
 
     // ============================================================== sender
 
+    /**
+     * Sets the sender (From) address. Required — send fails without it.
+     *
+     * @param address the sender email
+     * @return this request
+     * @see #sender(String)
+     * @see #fromAddress(String)
+     * @see #senderName(String)
+     * @since 1.0.0
+     */
     public EmailRequest from(String address) { this.from = address; return this; }
+
+    /**
+     * Alias of {@link #from(String)} — see that method for full
+     * documentation.
+     *
+     * @param address the sender email
+     * @return this request
+     * @see #from(String)
+     * @since 1.0.0
+     */
     public EmailRequest sender(String address) { return from(address); }
+
+    /**
+     * Alias of {@link #from(String)} — see that method for full
+     * documentation.
+     *
+     * @param address the sender email
+     * @return this request
+     * @see #from(String)
+     * @since 1.0.0
+     */
     public EmailRequest fromAddress(String address) { return from(address); }
 
+    /**
+     * Sets a display name for the sender. Appears as
+     * {@code "Display Name <address>"} in email clients.
+     *
+     * @param name the display name (may be null)
+     * @return this request
+     * @see #fromName(String)
+     * @see #senderDisplayName(String)
+     * @since 1.0.0
+     */
     public EmailRequest senderName(String name) { this.senderName = name; return this; }
+
+    /**
+     * Alias of {@link #senderName(String)} — see that method for full
+     * documentation.
+     *
+     * @param name the display name
+     * @return this request
+     * @see #senderName(String)
+     * @since 1.0.0
+     */
     public EmailRequest fromName(String name) { return senderName(name); }
+
+    /**
+     * Alias of {@link #senderName(String)} — see that method for full
+     * documentation.
+     *
+     * @param name the display name
+     * @return this request
+     * @see #senderName(String)
+     * @since 1.0.0
+     */
     public EmailRequest senderDisplayName(String name) { return senderName(name); }
 
+    /**
+     * Sets the SMTP username explicitly. If not set, the from address is
+     * used as the username.
+     *
+     * @param user the username
+     * @return this request
+     * @see #usernameFromEnv(String, String)
+     * @since 1.0.0
+     */
     public EmailRequest username(String user) { this.username = user; return this; }
+
+    /**
+     * Alias of {@link #username(String)} — see that method for full
+     * documentation.
+     *
+     * @param user the username
+     * @return this request
+     * @see #username(String)
+     * @since 1.0.0
+     */
     public EmailRequest user(String user) { return username(user); }
 
+    /**
+     * Reads the SMTP username from a {@code .env} file at send time.
+     *
+     * @param path the .env file path
+     * @param key the key containing the username
+     * @return this request
+     * @see #username(String)
+     * @see #envUsername(String, String)
+     * @see EnvLoader
+     * @since 1.0.0
+     */
     public EmailRequest usernameFromEnv(String path, String key) {
         this.usernameEnvPath = path;
         this.usernameEnvKey = key;
         return this;
     }
+
+    /**
+     * Alias of {@link #usernameFromEnv(String, String)} — see that method
+     * for full documentation.
+     *
+     * @param path the .env path
+     * @param key the .env key
+     * @return this request
+     * @see #usernameFromEnv(String, String)
+     * @since 1.0.0
+     */
     public EmailRequest envUsername(String path, String key) { return usernameFromEnv(path, key); }
 
     // ============================================================== recipients
 
+    /**
+     * Adds one To recipient. Multiple calls accumulate — each additional
+     * call adds another recipient, not a replacement.
+     *
+     * @param address the recipient email (null → no-op)
+     * @return this request
+     * @see #to(String...)
+     * @see #to(List)
+     * @see #cc(String)
+     * @see #bcc(String)
+     * @since 1.0.0
+     */
     public EmailRequest to(String address) { if (address != null) to.add(address); return this; }
+
+    /**
+     * Adds multiple To recipients.
+     *
+     * @param addresses the recipient emails (null → no-op)
+     * @return this request
+     * @see #to(String)
+     * @since 1.0.0
+     */
     public EmailRequest to(String... addresses) {
         if (addresses != null) for (String a : addresses) to(a);
         return this;
     }
+
+    /**
+     * Adds all To recipients from a list.
+     *
+     * @param addresses the list of recipients (null → no-op)
+     * @return this request
+     * @see #to(String)
+     * @since 1.0.0
+     */
     public EmailRequest to(List<String> addresses) { if (addresses != null) to.addAll(addresses); return this; }
+
+    /**
+     * Alias of {@link #to(String)} — see that method for full
+     * documentation.
+     *
+     * @param address the recipient email
+     * @return this request
+     * @see #to(String)
+     * @since 1.0.0
+     */
     public EmailRequest recipient(String address) { return to(address); }
+
+    /**
+     * Alias of {@link #to(String)} — see that method for full
+     * documentation.
+     *
+     * @param address the recipient email
+     * @return this request
+     * @see #to(String)
+     * @since 1.0.0
+     */
     public EmailRequest addRecipient(String address) { return to(address); }
 
+    /**
+     * Adds one CC recipient.
+     *
+     * @param address the CC email (null → no-op)
+     * @return this request
+     * @see #to(String)
+     * @see #bcc(String)
+     * @since 1.0.0
+     */
     public EmailRequest cc(String address) { if (address != null) cc.add(address); return this; }
+
+    /**
+     * Adds multiple CC recipients.
+     *
+     * @param addresses the CC emails (null → no-op)
+     * @return this request
+     * @see #cc(String)
+     * @since 1.0.0
+     */
     public EmailRequest cc(String... addresses) {
         if (addresses != null) for (String a : addresses) cc(a);
         return this;
     }
 
+    /**
+     * Adds one BCC recipient. BCC recipients are not visible to other
+     * recipients (the {@code Bcc:} header is not included in the
+     * transmitted MIME message, but they do receive the message via
+     * SMTP RCPT).
+     *
+     * @param address the BCC email (null → no-op)
+     * @return this request
+     * @see #to(String)
+     * @see #cc(String)
+     * @since 1.0.0
+     */
     public EmailRequest bcc(String address) { if (address != null) bcc.add(address); return this; }
+
+    /**
+     * Adds multiple BCC recipients.
+     *
+     * @param addresses the BCC emails (null → no-op)
+     * @return this request
+     * @see #bcc(String)
+     * @since 1.0.0
+     */
     public EmailRequest bcc(String... addresses) {
         if (addresses != null) for (String a : addresses) bcc(a);
         return this;
     }
 
+    /**
+     * Sets the Reply-To address — where replies go when the recipient
+     * clicks "Reply". Defaults to the from address if not set.
+     *
+     * @param address the Reply-To email
+     * @return this request
+     * @see #replyToName(String)
+     * @since 1.0.0
+     */
     public EmailRequest replyTo(String address) { this.replyTo = address; return this; }
+
+    /**
+     * Sets a display name for the Reply-To address.
+     *
+     * @param name the display name
+     * @return this request
+     * @see #replyTo(String)
+     * @see #replyToDisplayName(String)
+     * @since 1.0.0
+     */
     public EmailRequest replyToName(String name) { this.replyToName = name; return this; }
+
+    /**
+     * Alias of {@link #replyToName(String)} — see that method for full
+     * documentation.
+     *
+     * @param n the display name
+     * @return this request
+     * @see #replyToName(String)
+     * @since 1.0.0
+     */
     public EmailRequest replyToDisplayName(String n) { return replyToName(n); }
 
+    /**
+     * Sets the Return-Path (bounce) address. Bounce notifications are
+     * sent here when the recipient cannot receive the message.
+     *
+     * @param address the bounce email
+     * @return this request
+     * @see #returnPath(String)
+     * @since 1.0.0
+     */
     public EmailRequest bounceTo(String address) { this.bounceTo = address; return this; }
+
+    /**
+     * Alias of {@link #bounceTo(String)} — see that method for full
+     * documentation.
+     *
+     * @param address the bounce email
+     * @return this request
+     * @see #bounceTo(String)
+     * @since 1.0.0
+     */
     public EmailRequest returnPath(String address) { return bounceTo(address); }
 
     // ============================================================== priority
 
+    /**
+     * Sets the {@code X-Priority} header — 1 (highest) to 5 (lowest).
+     * Values outside the range are clamped.
+     *
+     * @param level the priority level
+     * @return this request
+     * @see #highPriority()
+     * @see #normalPriority()
+     * @see #lowPriority()
+     * @since 1.0.0
+     */
     public EmailRequest priority(int level) {
         this.priority = Math.max(1, Math.min(5, level));
         return this;
     }
+
+    /**
+     * Alias of {@link #priority(int)} with level 1 (highest).
+     *
+     * @return this request
+     * @see #priority(int)
+     * @since 1.0.0
+     */
     public EmailRequest highPriority() { return priority(1); }
+
+    /**
+     * Alias of {@link #priority(int)} with level 3 (normal — the default).
+     *
+     * @return this request
+     * @see #priority(int)
+     * @since 1.0.0
+     */
     public EmailRequest normalPriority() { return priority(3); }
+
+    /**
+     * Alias of {@link #priority(int)} with level 5 (lowest).
+     *
+     * @return this request
+     * @see #priority(int)
+     * @since 1.0.0
+     */
     public EmailRequest lowPriority() { return priority(5); }
 
     // ============================================================== extra headers
 
+    /**
+     * Adds a custom MIME header. Useful for {@code X-...} headers or
+     * for domain-specific metadata.
+     *
+     * @param name the header name (null → no-op)
+     * @param value the header value (null → no-op)
+     * @return this request
+     * @see #addHeader(String, String)
+     * @see #withHeader(String, String)
+     * @since 1.0.0
+     */
     public EmailRequest header(String name, String value) {
         if (name != null && value != null) extraHeaders.put(name, value);
         return this;
     }
+
+    /**
+     * Alias of {@link #header(String, String)} — see that method for
+     * full documentation.
+     *
+     * @param name the header name
+     * @param value the header value
+     * @return this request
+     * @see #header(String, String)
+     * @since 1.0.0
+     */
     public EmailRequest addHeader(String name, String value) { return header(name, value); }
+
+    /**
+     * Alias of {@link #header(String, String)} — see that method for
+     * full documentation.
+     *
+     * @param name the header name
+     * @param value the header value
+     * @return this request
+     * @see #header(String, String)
+     * @since 1.0.0
+     */
     public EmailRequest withHeader(String name, String value) { return header(name, value); }
 
     // ============================================================== subject
 
+    /**
+     * Sets the email subject. Non-ASCII characters are automatically
+     * encoded as {@code =?UTF-8?B?...?=} in the MIME header.
+     *
+     * @param s the subject (null → empty)
+     * @return this request
+     * @see #title(String)
+     * @since 1.0.0
+     */
     public EmailRequest subject(String s) { this.subject = s == null ? "" : s; return this; }
+
+    /**
+     * Alias of {@link #subject(String)} — see that method for full
+     * documentation.
+     *
+     * @param s the subject
+     * @return this request
+     * @see #subject(String)
+     * @since 1.0.0
+     */
     public EmailRequest title(String s) { return subject(s); }
 
     // ============================================================== body
 
+    /**
+     * Sets the plain-text body. If you also set {@link #html(String)},
+     * the MIME message is built as {@code multipart/alternative} with
+     * both parts.
+     *
+     * @param body the plain-text body
+     * @return this request
+     * @see #body(String)
+     * @see #plain(String)
+     * @see #bodyText(String)
+     * @see #html(String)
+     * @since 1.0.0
+     */
     public EmailRequest text(String body) { this.text = body; return this; }
+
+    /**
+     * Alias of {@link #text(String)} — see that method for full
+     * documentation.
+     *
+     * @param body the body
+     * @return this request
+     * @see #text(String)
+     * @since 1.0.0
+     */
     public EmailRequest body(String body) { return text(body); }
+
+    /**
+     * Alias of {@link #text(String)} — see that method for full
+     * documentation.
+     *
+     * @param body the body
+     * @return this request
+     * @see #text(String)
+     * @since 1.0.0
+     */
     public EmailRequest plain(String body) { return text(body); }
+
+    /**
+     * Alias of {@link #text(String)} — see that method for full
+     * documentation.
+     *
+     * @param body the body
+     * @return this request
+     * @see #text(String)
+     * @since 1.0.0
+     */
     public EmailRequest bodyText(String body) { return text(body); }
 
+    /**
+     * Sets the HTML body. If you also set {@link #text(String)}, the
+     * MIME message is built as {@code multipart/alternative} with both
+     * parts — the recipient's client chooses which to display.
+     *
+     * @param body the HTML body
+     * @return this request
+     * @see #htmlBody(String)
+     * @see #bodyHtml(String)
+     * @see #text(String)
+     * @see #template(String)
+     * @since 1.0.0
+     */
     public EmailRequest html(String body) { this.html = body; return this; }
+
+    /**
+     * Alias of {@link #html(String)} — see that method for full
+     * documentation.
+     *
+     * @param body the HTML body
+     * @return this request
+     * @see #html(String)
+     * @since 1.0.0
+     */
     public EmailRequest htmlBody(String body) { return html(body); }
+
+    /**
+     * Alias of {@link #html(String)} — see that method for full
+     * documentation.
+     *
+     * @param body the HTML body
+     * @return this request
+     * @see #html(String)
+     * @since 1.0.0
+     */
     public EmailRequest bodyHtml(String body) { return html(body); }
 
+    /**
+     * Sets an {@link HtmlTemplate} as the HTML body. The template is
+     * rendered at send time — placeholders must be declared first via
+     * {@link HtmlTemplate#placeholder(String, Object)}.
+     *
+     * @param t the template (null → no-op)
+     * @return this request
+     * @see #template(HtmlTemplate)
+     * @see #template(String)
+     * @see HtmlTemplate
+     * @since 1.0.0
+     */
     public EmailRequest htmlTemplate(HtmlTemplate t) { this.htmlTemplate = t; return this; }
+
+    /**
+     * Alias of {@link #htmlTemplate(HtmlTemplate)} — see that method for
+     * full documentation.
+     *
+     * @param t the template
+     * @return this request
+     * @see #htmlTemplate(HtmlTemplate)
+     * @since 1.0.0
+     */
     public EmailRequest template(HtmlTemplate t) { return htmlTemplate(t); }
+
+    /**
+     * Loads an HTML template from a file. Equivalent to
+     * {@code htmlTemplate(HtmlTemplate.of(path))}.
+     *
+     * @param path the template file path
+     * @return this request
+     * @see #htmlTemplate(HtmlTemplate)
+     * @see HtmlTemplate#of(String)
+     * @since 1.0.0
+     */
     public EmailRequest template(String path) { return htmlTemplate(HtmlTemplate.of(path)); }
 
     // ============================================================== signature
 
+    /**
+     * Sets a signature that is appended to the body. For plain text, it
+     * is separated by {@code "\n\n--\n"}; for HTML, it is rendered as
+     * an HTML paragraph after a horizontal separator.
+     *
+     * @param sig the signature text (null → no-op)
+     * @return this request
+     * @see #appendSignature(String)
+     * @see #signatureFromSession()
+     * @since 1.0.0
+     */
     public EmailRequest signature(String sig) { this.signature = sig; return this; }
-    public EmailRequest appendSignature(String sig) { this.signature = sig; return this; }
 
-    /** Builds a signature from {@link Session#me()} — name, program, roll, email. */
+    /**
+     * Alias of {@link #signature(String)} — see that method for full
+     * documentation.
+     *
+     * @param sig the signature text
+     * @return this request
+     * @see #signature(String)
+     * @since 1.0.0
+     */
+    public EmailRequest appendSignature(String sig) { return signature(sig); }
+
+    /**
+     * Builds a signature from the current {@link chirp.session.Session} —
+     * name, roll number, program, email.
+     *
+     * <p>Returns an empty string if the session fields are not set.
+     * Typically called once at program startup after configuring the
+     * Session, then reused for every email.</p>
+     *
+     * @return this request
+     * @see #signature(String)
+     * @see chirp.session.Session
+     * @since 1.0.0
+     */
     public EmailRequest signatureFromSession() {
         Session s = Session.me();
         StringBuilder sb = new StringBuilder();
@@ -252,10 +1066,32 @@ public final class EmailRequest {
         this.signature = sb.toString().trim();
         return this;
     }
+
+    /**
+     * Alias of {@link #signatureFromSession()} — see that method for
+     * full documentation.
+     *
+     * @return this request
+     * @see #signatureFromSession()
+     * @since 1.0.0
+     */
     public EmailRequest sessionSignature() { return signatureFromSession(); }
 
     // ============================================================== attachments
 
+    /**
+     * Attaches a file from the filesystem. The filename in the MIME
+     * message is the file's basename; the full path is not exposed.
+     *
+     * @param path the file path (must exist and be a regular file)
+     * @return this request
+     * @throws EmailException if the file does not exist or cannot be read
+     * @see #attach(File)
+     * @see #attach(String, byte[])
+     * @see #attachFile(String)
+     * @see #includeFile(String)
+     * @since 1.0.0
+     */
     public EmailRequest attach(String path) {
         if (path == null) return this;
         Path p = Path.of(path);
@@ -282,28 +1118,110 @@ public final class EmailRequest {
         }
         return this;
     }
+
+    /**
+     * Alias of {@link #attach(String)} — see that method for full
+     * documentation.
+     *
+     * @param path the file path
+     * @return this request
+     * @see #attach(String)
+     * @since 1.0.0
+     */
     public EmailRequest attachFile(String path) { return attach(path); }
+
+    /**
+     * Alias of {@link #attach(String)} — see that method for full
+     * documentation.
+     *
+     * @param path the file path
+     * @return this request
+     * @see #attach(String)
+     * @since 1.0.0
+     */
     public EmailRequest includeFile(String path) { return attach(path); }
 
+    /**
+     * Attaches a {@link File}.
+     *
+     * @param file the file (null → no-op)
+     * @return this request
+     * @throws EmailException if the file does not exist or cannot be read
+     * @see #attach(String)
+     * @since 1.0.0
+     */
     public EmailRequest attach(File file) {
         return file == null ? this : attach(file.getAbsolutePath());
     }
 
+    /**
+     * Attaches raw bytes with a given filename. Useful for generating
+     * an attachment in memory (a PDF built from data, a report
+     * serialised to bytes) without writing it to disk first.
+     *
+     * @param filename the filename that will appear in the email
+     * @param data the raw bytes (null → no-op)
+     * @return this request
+     * @see #attachBytes(String, byte[])
+     * @see #attach(String)
+     * @since 1.0.0
+     */
     public EmailRequest attach(String filename, byte[] data) {
         if (filename == null || data == null) return this;
         attachments.add(new Attachment(filename, data.clone()));
         return this;
     }
+
+    /**
+     * Alias of {@link #attach(String, byte[])} — see that method for
+     * full documentation.
+     *
+     * @param filename the filename
+     * @param data the bytes
+     * @return this request
+     * @see #attach(String, byte[])
+     * @since 1.0.0
+     */
     public EmailRequest attachBytes(String filename, byte[] data) { return attach(filename, data); }
 
-    /** Attaches every file (not directory) inside {@code path}. */
+    /**
+     * Attaches every file path in the list.
+     *
+     * @param paths the paths to attach (null → no-op)
+     * @return this request
+     * @throws EmailException if any path does not exist or is not a
+     * regular file
+     * @see #attachAll(List)
+     * @see #attach(String)
+     * @since 1.0.0
+     */
     public EmailRequest attachMany(List<String> paths) {
         if (paths != null) for (String p : paths) attach(p);
         return this;
     }
+
+    /**
+     * Alias of {@link #attachMany(List)} — see that method for full
+     * documentation.
+     *
+     * @param paths the paths to attach
+     * @return this request
+     * @see #attachMany(List)
+     * @since 1.0.0
+     */
     public EmailRequest attachAll(List<String> paths) { return attachMany(paths); }
 
-    /** Attaches all regular files inside a directory. */
+    /**
+     * Attaches every regular file in a directory (non-recursive — files
+     * in subdirectories are not included).
+     *
+     * @param path the directory path
+     * @return this request
+     * @throws EmailException if the path is not a directory
+     * @see #attachDir(String)
+     * @see #attach(String)
+     * @since 1.0.0
+     */
     public EmailRequest attachDirectory(String path) {
         if (path == null) return this;
         Path dir = Path.of(path);
@@ -319,39 +1237,181 @@ public final class EmailRequest {
         }
         return this;
     }
+
+    /**
+     * Alias of {@link #attachDirectory(String)} — see that method for
+     * full documentation.
+     *
+     * @param path the directory path
+     * @return this request
+     * @see #attachDirectory(String)
+     * @since 1.0.0
+     */
     public EmailRequest attachDir(String path) { return attachDirectory(path); }
 
-    /** Removes all attachments added so far. */
+    /**
+     * Removes all attachments.
+     *
+     * @return this request
+     * @see #clearAttachments()
+     * @see #removeAttachments()
+     * @since 1.0.0
+     */
     public EmailRequest noAttachments() {
         attachments.clear();
         return this;
     }
+
+    /**
+     * Alias of {@link #noAttachments()} — see that method for full
+     * documentation.
+     *
+     * @return this request
+     * @see #noAttachments()
+     * @since 1.0.0
+     */
     public EmailRequest clearAttachments() { return noAttachments(); }
+
+    /**
+     * Alias of {@link #noAttachments()} — see that method for full
+     * documentation.
+     *
+     * @return this request
+     * @see #noAttachments()
+     * @since 1.0.0
+     */
     public EmailRequest removeAttachments() { return noAttachments(); }
 
+    /**
+     * Returns the number of attachments currently queued.
+     *
+     * @return the attachment count
+     * @since 1.0.0
+     */
     public int attachmentCount() { return attachments.size(); }
 
     // ============================================================== password
 
+    /**
+     * Sets the SMTP password directly in code. <b>Discouraged</b> —
+     * sends a warning at send time. Use {@link #passwordFromEnv} in
+     * production.
+     *
+     * @param direct the password
+     * @return this request
+     * @see #withPassword(String)
+     * @see #passwordFromEnv(String, String)
+     * @see #promptPassword()
+     * @since 1.0.0
+     */
     public EmailRequest password(String direct) {
         this.password = direct;
         this.strategy = PasswordStrategy.DIRECT;
         return this;
     }
+
+    /**
+     * Alias of {@link #password(String)} — see that method for full
+     * documentation.
+     *
+     * @param direct the password
+     * @return this request
+     * @see #password(String)
+     * @since 1.0.0
+     */
     public EmailRequest withPassword(String direct) { return password(direct); }
 
+    /**
+     * Prompts for the password at send time. Nothing touches the
+     * filesystem — the user is asked via {@link System#console()} (or
+     * stdin if no console is available).
+     *
+     * @return this request
+     * @see #askPassword()
+     * @see #passwordFromEnv(String, String)
+     * @see PasswordStrategy#PROMPT
+     * @since 1.0.0
+     */
     public EmailRequest promptPassword() { this.strategy = PasswordStrategy.PROMPT; return this; }
+
+    /**
+     * Alias of {@link #promptPassword()} — see that method for full
+     * documentation.
+     *
+     * @return this request
+     * @see #promptPassword()
+     * @since 1.0.0
+     */
     public EmailRequest askPassword() { return promptPassword(); }
 
+    /**
+     * Reads the password from a {@code .env} file at send time. This is
+     * the recommended strategy — the password never appears in source
+     * code or in the git history.
+     *
+     * <pre>{@code
+     * // .env file (gitignored):
+     * SMTP_PASSWORD=app-specific-password
+     *
+     * // In code:
+     * Email.builder()
+     *     .host("smtp.gmail.com")
+     *     // ... config ...
+     *     .passwordFromEnv(".env", "SMTP_PASSWORD")
+     *     .send();
+     * }</pre>
+     *
+     * @param path the .env file path (defaults to {@code ".env"} if
+     * blank when the send starts)
+     * @param key the key containing the password (required)
+     * @return this request
+     * @see #envPassword(String, String)
+     * @see #password(String)
+     * @see EnvLoader
+     * @see PasswordStrategy#ENV
+     * @since 1.0.0
+     */
     public EmailRequest passwordFromEnv(String path, String key) {
         this.strategy = PasswordStrategy.ENV;
         this.envPath = path;
         this.envKey = key;
         return this;
     }
+
+    /**
+     * Alias of {@link #passwordFromEnv(String, String)} — see that
+     * method for full documentation and examples.
+     *
+     * @param path the .env path
+     * @param key the .env key
+     * @return this request
+     * @see #passwordFromEnv(String, String)
+     * @since 1.0.0
+     */
     public EmailRequest envPassword(String path, String key) { return passwordFromEnv(path, key); }
 
+    /**
+     * Sets the password strategy alone, without the parameters. Useful
+     * when the strategy is coming from configuration.
+     *
+     * @param s the strategy (null → no-op)
+     * @return this request
+     * @see #passwordFrom(PasswordStrategy, String, String)
+     * @since 1.0.0
+     */
     public EmailRequest passwordFrom(PasswordStrategy s) { this.strategy = s; return this; }
+
+    /**
+     * Sets the password strategy and its parameters in one call.
+     *
+     * @param s the strategy
+     * @param path for {@code DIRECT}: the password; for {@code ENV}: the
+     * .env path
+     * @param key for {@code ENV}: the .env key
+     * @return this request
+     * @see #passwordFrom(PasswordStrategy)
+     * @since 1.0.0
+     */
     public EmailRequest passwordFrom(PasswordStrategy s, String path, String key) {
         this.strategy = s;
         if (s == PasswordStrategy.ENV) { this.envPath = path; this.envKey = key; }
@@ -361,27 +1421,178 @@ public final class EmailRequest {
 
     // ============================================================== behaviour
 
+    /**
+     * Sets the SMTP connection timeout. Defaults to 30 seconds.
+     *
+     * @param d the timeout (null or negative → no-op)
+     * @return this request
+     * @see #timeoutSeconds(int)
+     * @since 1.0.0
+     */
     public EmailRequest timeout(Duration d) { if (d != null && !d.isNegative()) this.timeout = d; return this; }
+
+    /**
+     * Sets the SMTP connection timeout in seconds (clamped to ≥ 1).
+     *
+     * @param s the timeout in seconds
+     * @return this request
+     * @see #timeout(Duration)
+     * @since 1.0.0
+     */
     public EmailRequest timeoutSeconds(int s) { return timeout(Duration.ofSeconds(Math.max(1, s))); }
 
+    /**
+     * Enables verbose mode — the SMTP dialogue is forwarded to the
+     * listener's {@link EmailListener#onSmtpEvent(String)} and captured
+     * in {@link EmailResult#smtpLog()}.
+     *
+     * @param v whether to enable verbose
+     * @return this request
+     * @see #withVerbose()
+     * @see #noVerbose()
+     * @see #log()
+     * @since 1.0.0
+     */
     public EmailRequest verbose(boolean v) { this.verbose = v; return this; }
+
+    /**
+     * Enables verbose mode — see {@link #verbose(boolean)}.
+     *
+     * @return this request
+     * @see #verbose(boolean)
+     * @since 1.0.0
+     */
     public EmailRequest withVerbose() { return verbose(true); }
+
+    /**
+     * Disables verbose mode — see {@link #verbose(boolean)}.
+     *
+     * @return this request
+     * @see #verbose(boolean)
+     * @since 1.0.0
+     */
     public EmailRequest noVerbose() { return verbose(false); }
+
+    /**
+     * Alias of {@link #withVerbose()} — see that method for full
+     * documentation.
+     *
+     * @return this request
+     * @see #withVerbose()
+     * @since 1.0.0
+     */
     public EmailRequest log() { return verbose(true); }
+
+    /**
+     * Alias of {@link #withVerbose()} — see that method for full
+     * documentation.
+     *
+     * @return this request
+     * @see #withVerbose()
+     * @since 1.0.0
+     */
     public EmailRequest logs() { return verbose(true); }
 
+    /**
+     * Enables or disables the terminal spinner. When unset, the spinner
+     * is shown automatically in interactive console mode (i.e. after
+     * {@code Chirp.start()} with console messages on).
+     *
+     * @param v whether to show a spinner (null → automatic)
+     * @return this request
+     * @see #withLoader()
+     * @see #noLoader()
+     * @since 1.0.0
+     */
     public EmailRequest loader(boolean v) { this.loaderEnabled = v; return this; }
+
+    /**
+     * Enables the terminal spinner — see {@link #loader(boolean)}.
+     *
+     * @return this request
+     * @see #loader(boolean)
+     * @since 1.0.0
+     */
     public EmailRequest withLoader() { return loader(true); }
+
+    /**
+     * Disables the terminal spinner.
+     *
+     * @return this request
+     * @see #loader(boolean)
+     * @since 1.0.0
+     */
     public EmailRequest noLoader() { return loader(false); }
 
+    /**
+     * Enables or disables dry-run mode. In dry-run mode, the MIME
+     * message is built and returned but not sent — useful for
+     * validating configuration before a real send.
+     *
+     * @param v whether to enable dry run
+     * @return this request
+     * @see #preview()
+     * @see #previewMimeMessage()
+     * @since 1.0.0
+     */
     public EmailRequest dryRun(boolean v) { this.dryRun = v; return this; }
+
+    /**
+     * Alias of {@link #dryRun(boolean)} with {@code true} — see that
+     * method for full documentation.
+     *
+     * @return this request
+     * @see #dryRun(boolean)
+     * @since 1.0.0
+     */
     public EmailRequest preview() { return dryRun(true); }
 
+    /**
+     * Attaches a listener for send lifecycle events.
+     *
+     * @param l the listener (null → clears any previously attached listener)
+     * @return this request
+     * @see #onEvent(EmailListener)
+     * @see EmailListener
+     * @since 1.0.0
+     */
     public EmailRequest listener(EmailListener l) { this.listener = l; return this; }
+
+    /**
+     * Alias of {@link #listener(EmailListener)} — see that method for
+     * full documentation.
+     *
+     * @param l the listener
+     * @return this request
+     * @see #listener(EmailListener)
+     * @since 1.0.0
+     */
     public EmailRequest onEvent(EmailListener l) { return listener(l); }
 
     // ============================================================== send
 
+    /**
+     * Sends the email. Never throws — the failure is captured in the
+     * returned {@link EmailResult}.
+     *
+     * <p>This is the primary send method. Use it when you want to
+     * inspect the outcome:</p>
+     * <pre>{@code
+     * EmailResult result = request.send();
+     * if (result.isSuccess()) {
+     *     System.out.println("Sent in " + result.durationMs() + "ms");
+     * } else {
+     *     System.out.println("Failed: " + result.message());
+     * }
+     * }</pre>
+     *
+     * @return the send outcome
+     * @see #sendOrThrow()
+     * @see #sendWithRetry(int)
+     * @see #deliver()
+     * @see #dispatch()
+     * @since 1.0.0
+     */
     public EmailResult send() { return doSend(false); }
 
     /**
@@ -459,18 +1670,87 @@ public final class EmailRequest {
             if (loader != null) loader.stop();
         }
     }
+
+    /**
+     * Alias of {@link #send()} — see that method for full documentation
+     * and examples.
+     *
+     * @return the send outcome
+     * @see #send()
+     * @since 1.0.0
+     */
     public EmailResult deliver() { return send(); }
+
+    /**
+     * Alias of {@link #send()} — see that method for full documentation
+     * and examples.
+     *
+     * @return the send outcome
+     * @see #send()
+     * @since 1.0.0
+     */
     public EmailResult dispatch() { return send(); }
 
+    /**
+     * Sends the email, throwing {@link EmailException} on any failure.
+     *
+     * <p>Use this when the surrounding code can't handle a failure
+     * value — for example in a stream pipeline:</p>
+     * <pre>{@code
+     * recipients.stream()
+     *     .map(addr -> Email.builder().to(addr)...sendOrThrow())
+     *     .forEach(r -> System.out.println("Sent in " + r.durationMs() + "ms"));
+     * }</pre>
+     *
+     * @return the send outcome (success)
+     * @throws EmailException if the send fails
+     * @see #send()
+     * @see #deliverOrThrow()
+     * @since 1.0.0
+     */
     public EmailResult sendOrThrow() { return doSend(true); }
+
+    /**
+     * Alias of {@link #sendOrThrow()} — see that method for full
+     * documentation and examples.
+     *
+     * @return the send outcome
+     * @throws EmailException if the send fails
+     * @see #sendOrThrow()
+     * @since 1.0.0
+     */
     public EmailResult deliverOrThrow() { return sendOrThrow(); }
 
-    /** Retries {@code send()} up to N times on failure, with 500ms backoff. */
+    /**
+     * Sends with retries — retries on any failure, waiting 500ms
+     * between attempts.
+     *
+     * <p>This is a simple retry — it does not distinguish transport
+     * failures from validation failures. For granular retry control,
+     * use {@link #sendOrThrow()} and check
+     * {@link EmailException#isTransportError()}.</p>
+     *
+     * @param attempts the number of attempts (≥ 1)
+     * @return the last send outcome
+     * @see #sendWithRetry(int, Duration)
+     * @see #retry(int)
+     * @see #sendWithRetries(int)
+     * @see #send()
+     * @since 1.0.0
+     */
     public EmailResult sendWithRetry(int attempts) {
         return sendWithRetry(attempts, Duration.ofMillis(500));
     }
 
-    /** Retries with a custom delay. */
+    /**
+     * Sends with retries and a custom delay between attempts.
+     *
+     * @param attempts the number of attempts (≥ 1)
+     * @param delay the delay between attempts (null or negative → no delay)
+     * @return the last send outcome
+     * @see #sendWithRetry(int)
+     * @since 1.0.0
+     */
     public EmailResult sendWithRetry(int attempts, Duration delay) {
         int maxAttempts = Math.max(1, attempts);
         Duration d = delay == null || delay.isNegative() ? Duration.ZERO : delay;
@@ -492,18 +1772,84 @@ public final class EmailRequest {
         }
         return last;
     }
+
+    /**
+     * Alias of {@link #sendWithRetry(int)} — see that method for full
+     * documentation.
+     *
+     * @param attempts the number of attempts
+     * @return the last send outcome
+     * @see #sendWithRetry(int)
+     * @since 1.0.0
+     */
     public EmailResult retry(int attempts) { return sendWithRetry(attempts); }
+
+    /**
+     * Alias of {@link #sendWithRetry(int)} — see that method for full
+     * documentation.
+     *
+     * @param attempts the number of attempts
+     * @return the last send outcome
+     * @see #sendWithRetry(int)
+     * @since 1.0.0
+     */
     public EmailResult sendWithRetries(int attempts) { return sendWithRetry(attempts); }
 
-    /** Returns the built MIME message as a string — throws if config is invalid. */
+    /**
+     * Builds and returns the raw MIME message <b>without sending it</b>.
+     * Throws {@link EmailException} if the configuration is incomplete
+     * (missing host, from, body, etc.).
+     *
+     * <p>Useful for:
+     * <ul>
+     *   <li>Debugging — inspect exactly what would be sent</li>
+     *   <li>Testing — assert the message structure without network</li>
+     *   <li>Dry run — validate config before the real send</li>
+     * </ul>
+     * </p>
+     *
+     * @return the full MIME message
+     * @throws EmailException if configuration is invalid
+     * @see #previewIfValid()
+     * @see #dryRun(boolean)
+     * @see #mimeMessage()
+     * @since 1.0.0
+     */
     public String previewMimeMessage() {
         validate();
         return buildMimeMessage();
     }
+
+    /**
+     * Alias of {@link #previewMimeMessage()} — see that method for full
+     * documentation.
+     *
+     * @return the MIME message
+     * @throws EmailException if configuration is invalid
+     * @see #previewMimeMessage()
+     * @since 1.0.0
+     */
     public String mimeMessage() { return previewMimeMessage(); }
+
+    /**
+     * Alias of {@link #previewMimeMessage()} — see that method for full
+     * documentation.
+     *
+     * @return the MIME message
+     * @throws EmailException if configuration is invalid
+     * @see #previewMimeMessage()
+     * @since 1.0.0
+     */
     public String asMime() { return previewMimeMessage(); }
 
-    /** Returns the built MIME message or empty if config is invalid. */
+    /**
+     * Builds the MIME message, returning {@link Optional#empty()} on any
+     * configuration error instead of throwing.
+     *
+     * @return the MIME message, or empty on error
+     * @see #previewMimeMessage()
+     * @since 1.0.0
+     */
     public Optional<String> previewIfValid() {
         try {
             validate();
@@ -575,8 +1921,18 @@ public final class EmailRequest {
     // ============================================================== SMTP connectivity test
 
     /**
-     * Opens a TCP socket to {@code (host, port)} to verify connectivity.
-     * Does <b>not</b> verify credentials — that requires a full SMTP session.
+     * Opens a TCP socket to {@code (host, port)} to verify the server is
+     * reachable. Does <b>not</b> verify credentials — that requires a full
+     * SMTP session.
+     *
+     * <p>Useful before calling {@link #send()} to distinguish "the SMTP
+     * server is down" from "my configuration is wrong".</p>
+     *
+     * @return {@code true} if the socket connects successfully
+     * @see #canConnect()
+     * @see #testConnection()
+     * @see #testOrThrow()
+     * @since 1.0.0
      */
     public boolean test() {
         if (host == null || port <= 0) return false;
@@ -587,9 +1943,35 @@ public final class EmailRequest {
             return false;
         }
     }
+
+    /**
+     * Alias of {@link #test()} — see that method for full documentation.
+     *
+     * @return {@code true} if reachable
+     * @see #test()
+     * @since 1.0.0
+     */
     public boolean canConnect() { return test(); }
+
+    /**
+     * Alias of {@link #test()} — see that method for full documentation.
+     *
+     * @return {@code true} if reachable
+     * @see #test()
+     * @since 1.0.0
+     */
     public boolean testConnection() { return test(); }
 
+    /**
+     * Verifies the configuration and connectivity — throws
+     * {@link EmailException} if either is broken.
+     *
+     * @throws EmailException if the configuration is invalid or the
+     * server is unreachable
+     * @see #test()
+     * @see #canConnect()
+     * @since 1.0.0
+     */
     public void testOrThrow() {
         validate();
         if (!test()) {
@@ -684,8 +2066,7 @@ public final class EmailRequest {
         try {
             return chirp.console.Input.readRaw("SMTP password").trim();
         } catch (RuntimeException e) {
-            throw new EmailException(EmailException.Reason.MISSING_CONFIG,
-                    "Cannot prompt for password: " + e.getMessage(), e);
+            throw EmailException.missingConfig("Cannot prompt for password: " + e.getMessage());
         }
     }
 
@@ -825,6 +2206,12 @@ public final class EmailRequest {
         return all;
     }
 
+    /**
+     * Returns a short summary of the request — {@code "EmailRequest[host:port from=x to=N]"}.
+     *
+     * @return the summary
+     * @since 1.0.0
+     */
     @Override
     public String toString() {
         return "EmailRequest[" + host + ":" + port + " from=" + from + " to=" + to.size() + "]";

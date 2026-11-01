@@ -5,10 +5,40 @@ import java.util.function.Predicate;
 import javafx.scene.input.KeyCode;
 
 /**
- * Password field with the same validation API as {@link TextField}.
+ * Masked password input with the same validation API as
+ * {@link TextField}.
  *
- * <p><b>Note:</b> for most cases use {@link Field#password(String)} which adds
- * a label, counter, error area, and Show/Hide toggle automatically.</p>
+ * <p>{@code PasswordField} shares the exact same validator semantics as
+ * {@code TextField} — the only difference is that the underlying JavaFX
+ * control masks the characters. Everything else (validation predicates,
+ * error messages, the {@code invalid} CSS class, the on-enter callback)
+ * works identically.</p>
+ *
+ * <h2>Show/Hide toggle</h2>
+ * <p>This raw {@code PasswordField} does <b>not</b> have a Show/Hide
+ * toggle. If you want that UX, use {@link Field#password(String)} — the
+ * composite version includes a built-in toggle button. Use
+ * {@code PasswordField} only when you need the raw JavaFX behaviour.</p>
+ *
+ * <h2>Example</h2>
+ * <pre>{@code
+ * PasswordField pwd = PasswordField.of()
+ *     .placeholder("Password")
+ *     .minLength(8);
+ *
+ * if (pwd.isValid()) {
+ *     authenticate(user.value(), pwd.text());
+ * }
+ * }</pre>
+ *
+ * <h2>Related</h2>
+ * <p>For the composite with Show/Hide toggle, see
+ * {@link Field#password(String)}. For the raw text field, see
+ * {@link TextField}.</p>
+ *
+ * @see Field#password(String)
+ * @see TextField
+ * @since 1.0.0
  */
 public class PasswordField extends javafx.scene.control.PasswordField {
 
@@ -23,14 +53,67 @@ public class PasswordField extends javafx.scene.control.PasswordField {
         });
     }
 
+    /**
+     * Creates an empty password field.
+     *
+     * @return a new password field
+     * @see #of(String)
+     * @since 1.0.0
+     */
     public static PasswordField of() { return new PasswordField(); }
+
+    /**
+     * Creates a password field pre-filled with the given text.
+     *
+     * @param text the initial text (null → "")
+     * @return a new password field
+     * @see #of()
+     * @since 1.0.0
+     */
     public static PasswordField of(String text) { PasswordField p = new PasswordField(); p.setText(text); return p; }
 
+    /**
+     * Sets the text.
+     *
+     * @param t the text (null → "")
+     * @return this field, for chaining
+     * @since 1.0.0
+     */
     public PasswordField text(String t) { setText(t == null ? "" : t); return this; }
+
+    /**
+     * Sets the placeholder (prompt text).
+     *
+     * @param p the placeholder (null → "")
+     * @return this field, for chaining
+     * @since 1.0.0
+     */
     public PasswordField placeholder(String p) { setPromptText(p == null ? "" : p); return this; }
+
+    /**
+     * Enables or disables the field.
+     *
+     * @param d whether to disable
+     * @return this field
+     * @since 1.0.0
+     */
     public PasswordField disabled(boolean d) { setDisable(d); return this; }
+
+    /**
+     * Makes the field fill the available horizontal space.
+     *
+     * @return this field
+     * @since 1.0.0
+     */
     public PasswordField fullWidth() { setMaxWidth(Double.MAX_VALUE); return this; }
 
+    /**
+     * Registers a callback for the Enter key.
+     *
+     * @param r the callback (null → no-op)
+     * @return this field, for chaining
+     * @since 1.0.0
+     */
     public PasswordField onEnter(Runnable r) {
         if (r != null) setOnKeyPressed(e -> { if (e.getCode() == KeyCode.ENTER) r.run(); });
         return this;
@@ -38,20 +121,49 @@ public class PasswordField extends javafx.scene.control.PasswordField {
 
     // ---------------------------------------------------------- validation
 
+    /**
+     * Requires a non-blank value.
+     *
+     * @return this field, for chaining
+     * @since 1.0.0
+     */
     public PasswordField required() {
         return validate(s -> s != null && !s.isBlank(), "This field is required");
     }
 
+    /**
+     * Requires a minimum length.
+     *
+     * @param n the minimum length
+     * @return this field, for chaining
+     * @since 1.0.0
+     */
     public PasswordField minLength(int n) {
         return validate(s -> s != null && s.length() >= n,
                 "Must be at least " + n + " characters");
     }
 
+    /**
+     * Requires a maximum length.
+     *
+     * @param n the maximum length
+     * @return this field, for chaining
+     * @since 1.0.0
+     */
     public PasswordField maxLength(int n) {
         return validate(s -> s == null || s.length() <= n,
                 "Must be at most " + n + " characters");
     }
 
+    /**
+     * Sets a custom predicate validator. Replaces any previous
+     * validator.
+     *
+     * @param predicate the validator
+     * @param message the error message
+     * @return this field, for chaining
+     * @since 1.0.0
+     */
     public PasswordField validate(Predicate<String> predicate, String message) {
         this.validator = predicate;
         this.validatorMessage = message == null ? "Invalid value" : message;
@@ -59,6 +171,11 @@ public class PasswordField extends javafx.scene.control.PasswordField {
         return this;
     }
 
+    /**
+     * Runs the validator now.
+     *
+     * @since 1.0.0
+     */
     public void runValidation() {
         if (validator == null) return;
         boolean wasValid = isValid();
@@ -74,20 +191,44 @@ public class PasswordField extends javafx.scene.control.PasswordField {
         }
     }
 
+    /**
+     * Checks whether the current text passes the validator.
+     *
+     * @return {@code true} if valid (or no validator)
+     * @since 1.0.0
+     */
     public boolean isValid() {
         if (validator == null) return true;
         String v = getText() == null ? "" : getText();
         return validator.test(v);
     }
 
+    /**
+     * Returns the error message, or null if valid.
+     *
+     * @return the error message, or null
+     * @since 1.0.0
+     */
     public String error() { return isValid() ? null : validatorMessage; }
 
-    /** Forces a validation pass now and returns the resulting validity. */
+    /**
+     * Forces a validation pass and returns the current validity.
+     *
+     * @return {@code true} if valid
+     * @since 1.0.0
+     */
     public boolean check() {
         runValidation();
         return isValid();
     }
 
+    /**
+     * Registers a listener for validation state transitions.
+     *
+     * @param listener the listener (null → no-op)
+     * @return this field, for chaining
+     * @since 1.0.0
+     */
     public PasswordField onValidationChanged(Consumer<Boolean> listener) {
         this.onValidationChanged = listener;
         if (listener != null) listener.accept(isValid());

@@ -9,12 +9,39 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 
 /**
- * Fluent data table built on {@link TableView}.
+ * Fluent data table — columns defined at construction, rows added by
+ * {@link #row(Object...)}.
  *
- * <p><b>Row height and table height</b> are both explicit:
- * {@link #rowHeight(double)} sets cell size, {@link #height(double)} sets the
- * table's total pixel height (min + pref, so it never shrinks below this size).
- * Twelve rows at 32 px need {@code .height(32 * 12 + 30)} for the header.</p>
+ * <h2>Example</h2>
+ * <pre>{@code
+ * Table.of("Name", "Score", "Grade")
+ *     .row("Saad", 95, "A")
+ *     .row("Ali", 88, "B")
+ *     .rowHeight(32)
+ *     .height(32 * 3 + 30);   // 3 rows + header
+ * }</pre>
+ *
+ * <h2>Row and table height</h2>
+ * <p>{@link #rowHeight(double)} sets the cell height, which must match
+ * the value the table uses for virtualization. {@link #height(double)}
+ * sets the total table height (min + pref), so a VBox parent cannot
+ * shrink the table below that size. To size a table for N rows, use
+ * {@code .height(rowHeight * N + 30)} — the extra 30px accounts for the
+ * column header row.</p>
+ *
+ * <h2>Row contents</h2>
+ * <p>Each row is a varargs list of {@code Object} values. Short rows
+ * are padded with empty cells; excess cells are truncated. Numbers,
+ * booleans, and any type with a {@code toString} work as cell values —
+ * they are converted to strings on render.</p>
+ *
+ * <h2>Related</h2>
+ * <p>For a two-column key/value list, see {@link ListView}. For a
+ * hierarchical table, see {@link TreeTableView}.</p>
+ *
+ * @see ListView
+ * @see TreeTableView
+ * @since 1.0.0
  */
 public class Table extends TableView<ObservableList<String>> {
 
@@ -22,6 +49,13 @@ public class Table extends TableView<ObservableList<String>> {
 
     private Table() {}
 
+    /**
+     * Creates a table with the given column headers.
+     *
+     * @param columns the column header labels (null → no columns)
+     * @return a new table
+     * @since 1.0.0
+     */
     public static Table of(String... columns) {
         Table t = new Table();
         if (columns != null) {
@@ -44,6 +78,14 @@ public class Table extends TableView<ObservableList<String>> {
         return t;
     }
 
+    /**
+     * Adds a row of cells. Values are converted to strings.
+     *
+     * @param cells the cell values for this row
+     * @return this table, for chaining
+     * @see #rows(List)
+     * @since 1.0.0
+     */
     public Table row(Object... cells) {
         int columnCount = getColumns().size();
         int cellCount = cells == null ? 0 : cells.length;
@@ -57,33 +99,86 @@ public class Table extends TableView<ObservableList<String>> {
         return this;
     }
 
+    /**
+     * Adds multiple rows. Each inner list is one row.
+     *
+     * @param rows the rows to add (null → no-op)
+     * @return this table, for chaining
+     * @see #row(Object...)
+     * @since 1.0.0
+     */
     public Table rows(List<? extends List<?>> rows) {
         if (rows != null) for (List<?> r : rows) row(r.toArray());
         return this;
     }
 
+    /**
+     * Removes all rows.
+     *
+     * @return this table
+     * @since 1.0.0
+     */
     public Table clearAll() { getItems().clear(); return this; }
 
-    /** Sets cell height in pixels — must be set for the table to virtualize correctly. */
+    /**
+     * Sets the cell height. Required for the table to virtualize
+     * correctly — without it, large tables may render incorrectly.
+     *
+     * @param h the cell height in pixels
+     * @return this table
+     * @since 1.0.0
+     */
     public Table rowHeight(double h) {
         setFixedCellSize(h);
         return this;
     }
 
-    /** Sets the total table height in pixels. Forces at least this height. */
+    /**
+     * Sets the total table height (both preferred and minimum, so the
+     * table cannot be shrunk below this size).
+     *
+     * @param h the height in pixels
+     * @return this table
+     * @since 1.0.0
+     */
     public Table height(double h) {
         setMinHeight(h);
         setPrefHeight(h);
         return this;
     }
 
+    /**
+     * Applies alternating row striping via inline CSS.
+     *
+     * @return this table
+     * @since 1.0.0
+     */
     public Table striped() {
         setStyle("-fx-control-inner-background-alt: derive(-fx-control-inner-background, -5%);");
         return this;
     }
 
+    /**
+     * Makes the table fill the available horizontal space.
+     *
+     * @return this table
+     * @since 1.0.0
+     */
     public Table fullWidth() { setMaxWidth(Double.MAX_VALUE); return this; }
 
+    /**
+     * Returns the currently-selected row, or null if nothing is selected.
+     *
+     * @return the selected row, or null
+     * @since 1.0.0
+     */
     public List<String> selectedRow() { return getSelectionModel().getSelectedItem(); }
+
+    /**
+     * Returns the number of rows in the table.
+     *
+     * @return the row count
+     * @since 1.0.0
+     */
     public int rowCount() { return getItems().size(); }
 }

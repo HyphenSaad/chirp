@@ -10,27 +10,53 @@ import javafx.collections.FXCollections;
 import javafx.collections.transformation.FilteredList;
 
 /**
- * Fluent dropdown (ComboBox wrapper) with optional search, validation,
- * and single-select.
+ * Fluent dropdown — a {@link javafx.scene.control.ComboBox} wrapper with
+ * optional type-to-search mode and single-selection validation.
  *
- * <h2>Searchable mode</h2>
- * <p>{@link #searchable()} turns on type-to-filter. As the user types in the
- * editor, the visible options filter to matching items. Selecting an option
- * hides the popup and resets the filter.</p>
+ * <h2>What this wrapper adds over {@code new ComboBox<>()}</h2>
+ * <ul>
+ *   <li>Chaining — every setter returns {@code this}</li>
+ *   <li>Type-to-search mode via {@link #searchable()}</li>
+ *   <li>Built-in {@link #required()} validation</li>
+ *   <li>Fluent factories that take varargs or a list</li>
+ * </ul>
  *
- * <h2>Why the guard flag</h2>
- * <p>An editable ComboBox has a notorious feedback loop: refiltering the items
- * can clear the selected value (because the value is no longer in the filtered
- * list), which triggers the skin to clear the editor text, which triggers our
- * text listener again, which refilters … <strong>StackOverflowError</strong>
- * or endless flicker. A single boolean {@code filtering} suppresses the
- * listener while we're the ones causing the change.</p>
- *
+ * <h2>Example</h2>
  * <pre>{@code
- * Select s = Select.of("Pakistan", "India", "Bangladesh", "Nepal")
+ * Select country = Select.of("Pakistan", "India", "Bangladesh", "Nepal")
  *     .searchable()
- *     .onChange(v -> Console.info("Picked: " + v));
+ *     .required()
+ *     .onChange(v -> System.out.println("Picked: " + v));
  * }</pre>
+ *
+ * <h2>The searchable mode and its feedback loop</h2>
+ * <p>{@link #searchable()} turns the dropdown into an editable
+ * ComboBox whose editor filters the visible items as the user types.
+ * The naive implementation is famous for a feedback loop:</p>
+ * <ol>
+ *   <li>User types → our text listener refilters the item list</li>
+ *   <li>Refiltering can clear the currently-selected value (it is no
+ *       longer in the filtered set)</li>
+ *   <li>JavaFX's ComboBox skin reacts to the cleared value by clearing
+ *       the editor text</li>
+ *   <li>Clearing the editor text fires our text listener again — back
+ *       to step 1</li>
+ * </ol>
+ * <p>The result is an endless loop or flicker. The implementation here
+ * uses a single boolean guard ({@code filtering}) that is set to
+ * {@code true} while we are the ones mutating state, which suppresses
+ * the listener's own reaction. It is the standard fix for this
+ * problem, and it is why the class is not just
+ * {@code return new ComboBox<>()}.</p>
+ *
+ * <h2>Related</h2>
+ * <p>For a radio-button group (single-selection from a small fixed
+ * set), see {@link RadioGroup}. For a free-text field with
+ * autocomplete (not a dropdown), see {@link TextField}.</p>
+ *
+ * @see RadioGroup
+ * @see TextField
+ * @since 1.0.0
  */
 public class Select extends javafx.scene.control.ComboBox<String> {
 
@@ -50,6 +76,14 @@ public class Select extends javafx.scene.control.ComboBox<String> {
 
     // ---------------------------------------------------------- factories
 
+    /**
+     * Creates a dropdown with the given options.
+     *
+     * @param items the option strings (null → empty dropdown)
+     * @return a new dropdown
+     * @see #of(List)
+     * @since 1.0.0
+     */
     public static Select of(String... items) {
         Select s = new Select();
         if (items != null) {
@@ -59,6 +93,14 @@ public class Select extends javafx.scene.control.ComboBox<String> {
         return s;
     }
 
+    /**
+     * Creates a dropdown from a list of options.
+     *
+     * @param items the options (null → empty dropdown)
+     * @return a new dropdown
+     * @see #of(String...)
+     * @since 1.0.0
+     */
     public static Select of(List<String> items) {
         Select s = new Select();
         if (items != null) {
@@ -71,7 +113,19 @@ public class Select extends javafx.scene.control.ComboBox<String> {
     // ---------------------------------------------------------- searchable
 
     /**
-     * Enables type-to-filter. Idempotent — calling twice is safe.
+     * Enables type-to-filter. As the user types in the editor, the
+     * visible options filter to those that contain the query
+     * (case-insensitive). Selecting an option resets the filter and
+     * hides the popup.
+     *
+     * <p>Idempotent — calling twice is safe and does not double-wrap the
+     * filter.</p>
+     *
+     * <p>See the class-level Javadoc for the feedback loop this method
+     * is carefully written to avoid.</p>
+     *
+     * @return this dropdown, for chaining
+     * @since 1.0.0
      */
     public Select searchable() {
         if (filteredItems != null) return this;
@@ -142,18 +196,46 @@ public class Select extends javafx.scene.control.ComboBox<String> {
 
     // ---------------------------------------------------------- chaining
 
+    /**
+     * Sets the selected value.
+     *
+     * @param value the value to select (null → no-op)
+     * @return this dropdown, for chaining
+     * @see #value()
+     * @since 1.0.0
+     */
     public Select selected(String value) {
         if (value != null) setValue(value);
         return this;
     }
 
+    /**
+     * Enables or disables the dropdown.
+     *
+     * @param d whether to disable
+     * @return this dropdown
+     * @since 1.0.0
+     */
     public Select disabled(boolean d) { setDisable(d); return this; }
 
+    /**
+     * Makes the dropdown fill the available horizontal space.
+     *
+     * @return this dropdown
+     * @since 1.0.0
+     */
     public Select fullWidth() {
         setMaxWidth(Double.MAX_VALUE);
         return this;
     }
 
+    /**
+     * Registers a listener for value changes.
+     *
+     * @param consumer the listener (null → no-op)
+     * @return this dropdown, for chaining
+     * @since 1.0.0
+     */
     public Select onChange(Consumer<String> consumer) {
         if (consumer != null) {
             valueProperty().addListener((obs, oldV, newV) -> consumer.accept(newV));
@@ -161,18 +243,34 @@ public class Select extends javafx.scene.control.ComboBox<String> {
         return this;
     }
 
-    /** @return the current value, or {@code null}. */
+    /**
+     * Returns the current value, or null if nothing is selected.
+     *
+     * @return the value, or null
+     * @see #selected(String)
+     * @since 1.0.0
+     */
     public String value() { return getValue(); }
 
     // ---------------------------------------------------------- validation
 
-    /** Requires a non-null selection. */
+    /**
+     * Requires a non-null selection.
+     *
+     * @return this dropdown, for chaining
+     * @since 1.0.0
+     */
     public Select required() {
         this.required = true;
         runValidation();
         return this;
     }
 
+    /**
+     * Runs the validator now.
+     *
+     * @since 1.0.0
+     */
     public void runValidation() {
         if (!required) return;
         if (getValue() != null) {
@@ -182,5 +280,11 @@ public class Select extends javafx.scene.control.ComboBox<String> {
         }
     }
 
+    /**
+     * Checks whether the current selection passes the validator.
+     *
+     * @return {@code true} if valid (or no validator)
+     * @since 1.0.0
+     */
     public boolean isValid() { return !required || getValue() != null; }
 }
