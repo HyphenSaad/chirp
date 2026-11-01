@@ -1,15 +1,15 @@
 # =============================================================================
 # Builds and deploys the Chirp documentation site to GitHub Pages.
 #
-# Triggers on every push to main. Two artifacts get combined into the
-# deployed site:
+# Three things are combined into the deployed site:
 #
-#   1. The hand-written docs in docs/  (Markdown, rendered to HTML by Jekyll)
-#   2. The Javadoc built from src/main/java/  (HTML, dropped into docs/javadoc/)
+#   1. The hand-written docs in docs/  (Markdown → rendered to HTML by Jekyll)
+#   2. The Javadoc built from src/main/java/  (copied into docs/javadoc/)
+#   3. The rendered Jekyll site  (_site/) → uploaded as the Pages artifact
 #
-# Nothing is committed back to the repository. The generated Javadoc lives
-# only in the runner workspace and in the Pages artifact — so the repo stays
-# clean and the site always matches the source code at the current commit.
+# GitHub Pages requires index.html at the TOP of the deployed artifact —
+# it does NOT look for index.md. So Jekyll must render the markdown before
+# upload; otherwise /chirp/ 404s even though /chirp/javadoc/ works.
 # =============================================================================
 
 name: Docs
@@ -17,15 +17,13 @@ name: Docs
 on:
   push:
     branches: [main]
-  workflow_dispatch:                    # allow manual trigger from the Actions tab
+  workflow_dispatch:
 
-# Required permissions for the Pages deployment
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Only one deployment at a time; new pushes wait for the current build
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -49,29 +47,37 @@ jobs:
           java-version: '17'
           cache: maven
 
+      # ---- 1. Build Javadoc into target/site/apidocs/ ----------------------
       - name: Build Javadoc
-        # Produces target/site/apidocs/ — the full Javadoc HTML tree.
-        # doclint=none and quiet=true are already set in pom.xml, so this
-        # never fails on missing @param / @return tags.
         run: mvn -B -ntp javadoc:javadoc
 
+      # ---- 2. Move Javadoc into the Jekyll source tree ----------------------
       - name: Copy Javadoc into docs
-        # Jekyll serves docs/ as the site root. Adding the Javadoc here means
-        # it lives at /javadoc/ on the deployed site.
         run: |
           mkdir -p docs/javadoc
           cp -r target/site/apidocs/* docs/javadoc/
 
+      # ---- 3. Render docs/ (markdown + javadoc) into _site/ ----------------
+      # This is the step that was missing. It converts docs/index.md →
+      # _site/index.html, docs/QUICKSTART.md → _site/QUICKSTART.html, etc.,
+      # and copies docs/javadoc/ through unchanged (HTML is already HTML).
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs
+          destination: ./_site
+          future: false
+
+      # ---- 4. Publish _site/ as the Pages artifact -------------------------
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        # The artifact IS the deployed site. Whatever is inside docs/ at this
-        # point — markdown + javadoc + any static assets — becomes the site.
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/
+          path: ./_site
 
+      # ---- 5. Deploy to the Pages CDN --------------------------------------
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
