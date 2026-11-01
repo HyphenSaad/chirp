@@ -15,33 +15,101 @@ import java.util.Map;
 import java.util.function.Predicate;
 
 /**
- * CSV file operations with full RFC 4180 quoting support and a typed table
- * view.
+ * CSV file operations with full RFC 4180 quoting support and a typed
+ * table view.
  *
- * <h2>Naming</h2>
- * <p>{@code read / load / readCsv / parseFile}; {@code readWithHeaders /
- * readWithHeader / bodyRows}; {@code readHeaders / headers / columns /
- * getHeaders}; {@code readAsRecords / records / asRecords / readRecords};
- * {@code write / save / writeCsv / saveCsv}; {@code append / addRow /
- * appendRow}; {@code writeRecords / saveRecords / writeAll}.</p>
+ * <p>Handles the tricky parts of CSV that most "split on comma" code gets
+ * wrong: quoted fields containing commas, escaped quotes inside quoted
+ * fields, and embedded newlines. Round-tripping any of these through
+ * {@link #write(String, List)} and {@link #read(String)} produces the
+ * same data that went in.</p>
  *
- * <h2>Table view</h2>
- * <p>{@link #table(String)} returns a {@link CsvTable} record with
- * {@code headers} and {@code records} — easier than juggling two return
- * types.</p>
+ * <h2>Four ways to read a CSV file</h2>
+ * <table border="1">
+ *   <caption>Reading a CSV file — pick the shape that matches your use</caption>
+ *   <tr><th>Method</th><th>Returns</th><th>When to use</th></tr>
+ *   <tr><td>{@link #read(String)}</td><td>{@code List<List<String>>}</td>
+ *       <td>Positional access by column index</td></tr>
+ *   <tr><td>{@link #readAsRecords(String)}</td>
+ *       <td>{@code List<Map<String, String>>}</td>
+ *       <td>Access by column name</td></tr>
+ *   <tr><td>{@link #readHeaders(String)}</td>
+ *       <td>{@code List<String>}</td>
+ *       <td>Just the header row</td></tr>
+ *   <tr><td>{@link #table(String)}</td><td>{@link CsvTable}</td>
+ *       <td>Both headers and rows, in one typed record</td></tr>
+ * </table>
+ *
+ * <h2>RFC 4180 quoting rules</h2>
+ * <ul>
+ *   <li>A field containing a comma, a quote, or a newline is wrapped in
+ *       double quotes</li>
+ *   <li>A literal quote inside a quoted field is escaped as {@code ""}</li>
+ *   <li>A leading space is preserved as-is (not trimmed)</li>
+ * </ul>
+ * <p>{@link #write(String, List)} applies these rules automatically;
+ * {@link #read(String)} inverts them.</p>
+ *
+ * <h2>Example — read and use a table</h2>
+ * <pre>{@code
+ * CsvFile.CsvTable t = CsvFile.table("students.csv");
+ *
+ * println("Columns: " + t.headers());
+ * println("Rows   : " + t.rowCount());
+ *
+ * // Access by column name
+ * List<String> names = t.column("name");
+ *
+ * // Filter, then write the filtered version back
+ * CsvTable topStudents = t.filter(row -> Integer.parseInt(row.get("score")) >= 90);
+ * CsvFile.writeTable("top.csv", topStudents);
+ * }</pre>
+ *
+ * <h2>Related</h2>
+ * <p>For general file operations, see {@link FileIO}. For text files,
+ * see {@link TextFileIO}. For JSON, see {@link JsonFile}.</p>
+ *
+ * @see TextFileIO
+ * @see JsonFile
+ * @see FileIO
+ * @since 1.0.0
  */
 public final class CsvFile {
 
-    public enum Key { DELIMITER, HEADERS, QUOTE }
+    /**
+     * Key enum for the key-value write overload — controls the field
+     * delimiter.
+     *
+     * @since 1.0.0
+     */
+    public enum Key {
+        /** The delimiter character — {@code ','} by default. */
+        DELIMITER,
+        /** Reserved for future use. */
+        HEADERS,
+        /** Reserved for future use. */
+        QUOTE
+    }
 
     /**
-     * A CSV table — headers plus typed records.
+     * A CSV table — headers plus typed records, all in one immutable
+     * record.
      *
      * <p>Both fields are defensive-copied in the canonical constructor:
-     * {@code headers} becomes an immutable list, {@code records} becomes an
-     * immutable list of immutable {@link LinkedHashMap}s (order preserved).
-     * Callers can no longer mutate the table by keeping a reference to the
-     * lists/maps they passed to the constructor.</p>
+     * {@code headers} becomes an immutable list, {@code records} becomes
+     * an immutable list of immutable {@link LinkedHashMap}s (order
+     * preserved). Callers cannot mutate the table by keeping a reference
+     * to the lists/maps they passed to the constructor.</p>
+     *
+     * <p>Unlike a raw {@code List<Map<String, String>>}, {@code CsvTable}
+     * carries the header order, so a round-trip write preserves the
+     * original column ordering even if the maps were assembled in a
+     * different order.</p>
+     *
+     * @param headers the column headers, in order (may be null → empty)
+     * @param records the row records (may be null → empty)
+     * @see CsvFile#table(String)
+     * @since 1.0.0
      */
     public record CsvTable(List<String> headers, List<Map<String, String>> records) {
 
@@ -60,11 +128,48 @@ public final class CsvFile {
             }
         }
 
+        /**
+         * Returns the number of data rows (excludes the header row).
+         *
+         * @return the row count
+         * @see #columnCount()
+         * @see #isEmpty()
+         * @since 1.0.0
+         */
         public int rowCount() { return records.size(); }
+
+        /**
+         * Returns the number of columns (from the header row).
+         *
+         * @return the column count
+         * @see #rowCount()
+         * @since 1.0.0
+         */
         public int columnCount() { return headers.size(); }
+
+        /**
+         * Checks whether the table has no data rows.
+         *
+         * @return {@code true} if there are no records
+         * @see #rowCount()
+         * @since 1.0.0
+         */
         public boolean isEmpty() { return records.isEmpty(); }
 
-        /** Returns a column's values from every row, in order. */
+        /**
+         * Returns all values from a single column, in row order.
+         *
+         * <p>Missing values (when a row does not contain the column key)
+         * are returned as empty string, not null.</p>
+         *
+         * <pre>{@code
+         * List<String> names = table.column("name");
+         * }</pre>
+         *
+         * @param name the column header
+         * @return the column values, or empty if the column does not exist
+         * @since 1.0.0
+         */
         public List<String> column(String name) {
             List<String> result = new ArrayList<>();
             for (Map<String, String> row : records) {
@@ -73,14 +178,28 @@ public final class CsvFile {
             return result;
         }
 
-        /** Filters rows by a predicate on the whole record. */
+        /**
+         * Returns a new table containing only the rows that pass the
+         * predicate.
+         *
+         * @param predicate the row filter
+         * @return a new filtered table
+         * @since 1.0.0
+         */
         public CsvTable filter(Predicate<Map<String, String>> predicate) {
             List<Map<String, String>> kept = new ArrayList<>();
             for (Map<String, String> row : records) if (predicate.test(row)) kept.add(row);
             return new CsvTable(headers, kept);
         }
 
-        /** Sorts rows by a column, lexicographically. */
+        /**
+         * Returns a new table with rows sorted lexicographically by the
+         * given column.
+         *
+         * @param column the column to sort by
+         * @return a new sorted table
+         * @since 1.0.0
+         */
         public CsvTable sortBy(String column) {
             List<Map<String, String>> sorted = new ArrayList<>(records);
             sorted.sort((a, b) -> {
@@ -96,13 +215,72 @@ public final class CsvFile {
 
     // ============================================================== read
 
+    /**
+     * Reads the CSV file as a list of rows, using {@code ','} as the
+     * delimiter.
+     *
+     * <p>Returns the header row as the first element, followed by the
+     * data rows. Empty rows are preserved as single-empty-cell rows.</p>
+     *
+     * @param path the file path (may be null → empty)
+     * @return the rows, or empty on failure
+     * @see #read(String, char)
+     * @see #load(String)
+     * @see #readCsv(String)
+     * @see #parseFile(String)
+     * @see #table(String)
+     * @since 1.0.0
+     */
     public static List<List<String>> read(String path) {
         return read(path, ',');
     }
+
+    /**
+     * Alias of {@link #read(String)} — see that method for full
+     * documentation and examples.
+     *
+     * @param path the file path
+     * @return the rows
+     * @see #read(String)
+     * @since 1.0.0
+     */
     public static List<List<String>> load(String path) { return read(path); }
+
+    /**
+     * Alias of {@link #read(String)} — see that method for full
+     * documentation and examples.
+     *
+     * @param path the file path
+     * @return the rows
+     * @see #read(String)
+     * @since 1.0.0
+     */
     public static List<List<String>> readCsv(String path) { return read(path); }
+
+    /**
+     * Alias of {@link #read(String)} — see that method for full
+     * documentation and examples.
+     *
+     * @param path the file path
+     * @return the rows
+     * @see #read(String)
+     * @since 1.0.0
+     */
     public static List<List<String>> parseFile(String path) { return read(path); }
 
+    /**
+     * Reads the CSV file with a custom delimiter — tab-separated values
+     * ({@code '\t'}), pipe-separated ({@code '|'}), and so on.
+     *
+     * <p>Quoting rules apply regardless of delimiter — a {@code '\t'}
+     * inside a quoted field is preserved as a literal tab character.</p>
+     *
+     * @param path the file path (may be null → empty)
+     * @param delimiter the field separator character
+     * @return the rows, or empty on failure
+     * @see #read(String)
+     * @since 1.0.0
+     */
     public static List<List<String>> read(String path, char delimiter) {
         Trace.enter("csv", "read", path, "delimiter='" + delimiter + "'");
         List<List<String>> rows = new ArrayList<>();
@@ -119,22 +297,109 @@ public final class CsvFile {
         return rows;
     }
 
+    /**
+     * Reads the CSV file and returns only the data rows (skips the
+     * header). Returns empty for a null or empty file.
+     *
+     * @param path the file path (may be null → empty)
+     * @return the data rows without the header
+     * @see #readWithHeader(String)
+     * @see #bodyRows(String)
+     * @see #readHeaders(String)
+     * @since 1.0.0
+     */
     public static List<List<String>> readWithHeaders(String path) {
         List<List<String>> rows = read(path);
         if (rows.isEmpty()) return rows;
         return new ArrayList<>(rows.subList(1, rows.size()));
     }
+
+    /**
+     * Alias of {@link #readWithHeaders(String)} — see that method for
+     * full documentation.
+     *
+     * @param path the file path
+     * @return the data rows without the header
+     * @see #readWithHeaders(String)
+     * @since 1.0.0
+     */
     public static List<List<String>> readWithHeader(String path) { return readWithHeaders(path); }
+
+    /**
+     * Alias of {@link #readWithHeaders(String)} — see that method for
+     * full documentation.
+     *
+     * @param path the file path
+     * @return the data rows without the header
+     * @see #readWithHeaders(String)
+     * @since 1.0.0
+     */
     public static List<List<String>> bodyRows(String path) { return readWithHeaders(path); }
 
+    /**
+     * Reads only the header row from the CSV file.
+     *
+     * @param path the file path (may be null → empty)
+     * @return the header row, or empty for null / empty / unreadable
+     * @see #headers(String)
+     * @see #columns(String)
+     * @see #getHeaders(String)
+     * @see #readWithHeaders(String)
+     * @since 1.0.0
+     */
     public static List<String> readHeaders(String path) {
         List<List<String>> rows = read(path);
         return rows.isEmpty() ? new ArrayList<>() : rows.get(0);
     }
+
+    /**
+     * Alias of {@link #readHeaders(String)} — see that method for full
+     * documentation.
+     *
+     * @param path the file path
+     * @return the header row
+     * @see #readHeaders(String)
+     * @since 1.0.0
+     */
     public static List<String> headers(String path) { return readHeaders(path); }
+
+    /**
+     * Alias of {@link #readHeaders(String)} — see that method for full
+     * documentation.
+     *
+     * @param path the file path
+     * @return the header row
+     * @see #readHeaders(String)
+     * @since 1.0.0
+     */
     public static List<String> columns(String path) { return readHeaders(path); }
+
+    /**
+     * Alias of {@link #readHeaders(String)} — see that method for full
+     * documentation.
+     *
+     * @param path the file path
+     * @return the header row
+     * @see #readHeaders(String)
+     * @since 1.0.0
+     */
     public static List<String> getHeaders(String path) { return readHeaders(path); }
 
+    /**
+     * Reads the CSV file as a list of row maps, keyed by column name.
+     *
+     * <p>Missing cells (when a row is shorter than the header) are filled
+     * with empty string. Extra cells (when a row is longer than the
+     * header) are silently dropped.</p>
+     *
+     * @param path the file path (may be null → empty)
+     * @return the row maps, or empty on failure
+     * @see #records(String)
+     * @see #asRecords(String)
+     * @see #readRecords(String)
+     * @see #table(String)
+     * @since 1.0.0
+     */
     public static List<Map<String, String>> readAsRecords(String path) {
         List<List<String>> rows = read(path);
         if (rows.isEmpty()) return new ArrayList<>();
@@ -152,14 +417,52 @@ public final class CsvFile {
         Trace.debug("csv", "readAsRecords: {} records, {} headers", records.size(), headers.size());
         return records;
     }
+
+    /**
+     * Alias of {@link #readAsRecords(String)} — see that method for full
+     * documentation.
+     *
+     * @param path the file path
+     * @return the row maps
+     * @see #readAsRecords(String)
+     * @since 1.0.0
+     */
     public static List<Map<String, String>> records(String path) { return readAsRecords(path); }
+
+    /**
+     * Alias of {@link #readAsRecords(String)} — see that method for full
+     * documentation.
+     *
+     * @param path the file path
+     * @return the row maps
+     * @see #readAsRecords(String)
+     * @since 1.0.0
+     */
     public static List<Map<String, String>> asRecords(String path) { return readAsRecords(path); }
+
+    /**
+     * Alias of {@link #readAsRecords(String)} — see that method for full
+     * documentation.
+     *
+     * @param path the file path
+     * @return the row maps
+     * @see #readAsRecords(String)
+     * @since 1.0.0
+     */
     public static List<Map<String, String>> readRecords(String path) { return readAsRecords(path); }
 
     /**
-     * Reads a CSV file as a typed {@link CsvTable} — headers + records in one
-     * call. Preferred over {@link #readHeaders} + {@link #readAsRecords} when
-     * you need both.
+     * Reads a CSV file as a typed {@link CsvTable} — headers plus records
+     * in one call.
+     *
+     * <p>Preferred over {@link #readHeaders(String)} + {@link #readAsRecords(String)}
+     * when you need both, because the two are guaranteed to be consistent.</p>
+     *
+     * @param path the file path (may be null → empty table)
+     * @return the table, or empty on failure
+     * @see CsvTable
+     * @see #asTable(String)
+     * @since 1.0.0
      */
     public static CsvTable table(String path) {
         List<List<String>> rows = read(path);
@@ -177,21 +480,53 @@ public final class CsvFile {
         }
         return new CsvTable(headers, records);
     }
+
+    /**
+     * Alias of {@link #table(String)} — see that method for full
+     * documentation and examples.
+     *
+     * @param path the file path
+     * @return the table
+     * @see #table(String)
+     * @since 1.0.0
+     */
     public static CsvTable asTable(String path) { return table(path); }
 
-    /** Returns a single column's values across all rows. */
+    /**
+     * Returns a single column's values from across all rows.
+     *
+     * @param path the file path
+     * @param name the column header
+     * @return the column values, or empty on failure
+     * @see CsvTable#column(String)
+     * @since 1.0.0
+     */
     public static List<String> column(String path, String name) {
         CsvTable t = table(path);
         return t.column(name);
     }
 
-    /** Number of data rows (excludes header). */
+    /**
+     * Returns the number of data rows (excludes the header).
+     *
+     * @param path the file path
+     * @return the row count, or 0 on failure
+     * @see #columnCount(String)
+     * @since 1.0.0
+     */
     public static int rowCount(String path) {
         List<List<String>> rows = read(path);
         return Math.max(0, rows.size() - 1);
     }
 
-    /** Number of columns (from header row). */
+    /**
+     * Returns the number of columns (from the header row).
+     *
+     * @param path the file path
+     * @return the column count, or 0 on failure
+     * @see #rowCount(String)
+     * @since 1.0.0
+     */
     public static int columnCount(String path) {
         List<String> headers = readHeaders(path);
         return headers.size();
@@ -199,13 +534,74 @@ public final class CsvFile {
 
     // ============================================================== write
 
+    /**
+     * Writes the rows to the CSV file, using {@code ','} as the
+     * delimiter.
+     *
+     * <p>Fields containing commas, quotes, or newlines are automatically
+     * quoted and escaped. Round-trip through {@link #read(String)}
+     * produces the same data that went in.</p>
+     *
+     * @param path the file path
+     * @param rows the rows to write
+     * @return {@code true} on success
+     * @see #write(String, List, char)
+     * @see #save(String, List)
+     * @see #writeCsv(String, List)
+     * @see #saveCsv(String, List)
+     * @see #writeTable(String, CsvTable)
+     * @since 1.0.0
+     */
     public static boolean write(String path, List<List<String>> rows) {
         return write(path, rows, ',');
     }
+
+    /**
+     * Alias of {@link #write(String, List)} — see that method for full
+     * documentation and examples.
+     *
+     * @param path the file path
+     * @param rows the rows to write
+     * @return {@code true} on success
+     * @see #write(String, List)
+     * @since 1.0.0
+     */
     public static boolean save(String path, List<List<String>> rows) { return write(path, rows); }
+
+    /**
+     * Alias of {@link #write(String, List)} — see that method for full
+     * documentation and examples.
+     *
+     * @param path the file path
+     * @param rows the rows to write
+     * @return {@code true} on success
+     * @see #write(String, List)
+     * @since 1.0.0
+     */
     public static boolean writeCsv(String path, List<List<String>> rows) { return write(path, rows); }
+
+    /**
+     * Alias of {@link #write(String, List)} — see that method for full
+     * documentation and examples.
+     *
+     * @param path the file path
+     * @param rows the rows to write
+     * @return {@code true} on success
+     * @see #write(String, List)
+     * @since 1.0.0
+     */
     public static boolean saveCsv(String path, List<List<String>> rows) { return write(path, rows); }
 
+    /**
+     * Writes the rows to the CSV file with a custom delimiter.
+     *
+     * @param path the file path
+     * @param rows the rows to write
+     * @param delimiter the field separator character
+     * @return {@code true} on success
+     * @see #write(String, List)
+     * @since 1.0.0
+     */
     public static boolean write(String path, List<List<String>> rows, char delimiter) {
         Trace.enter("csv", "write", path, "rows=" + (rows == null ? 0 : rows.size()));
         StringBuilder sb = new StringBuilder();
@@ -224,7 +620,21 @@ public final class CsvFile {
         return success;
     }
 
-    /** Key-value overload — {@code write(path, rows, Key.DELIMITER, '\t')}. */
+    /**
+     * Writes the rows to the CSV file with key-value options — allows a
+     * custom delimiter via {@link Key#DELIMITER}.
+     *
+     * <pre>{@code
+     * CsvFile.write("data.tsv", rows, CsvFile.Key.DELIMITER, '\t');
+     * }</pre>
+     *
+     * @param path the file path
+     * @param rows the rows to write
+     * @param keyValues alternating {@link Key} → value pairs (may be null)
+     * @return {@code true} on success
+     * @see #write(String, List, char)
+     * @since 1.0.0
+     */
     public static boolean write(String path, List<List<String>> rows, Object... keyValues) {
         char delimiter = ',';
         if (keyValues != null) {
@@ -236,16 +646,73 @@ public final class CsvFile {
         }
         return write(path, rows, delimiter);
     }
+
+    /**
+     * Alias of {@link #write(String, List, Object...)} — see that method
+     * for full documentation.
+     *
+     * @param path the file path
+     * @param rows the rows to write
+     * @param keyValues alternating key-value pairs
+     * @return {@code true} on success
+     * @see #write(String, List, Object...)
+     * @since 1.0.0
+     */
     public static boolean save(String path, List<List<String>> rows, Object... keyValues) {
         return write(path, rows, keyValues);
     }
 
+    /**
+     * Appends a single row to the CSV file. Creates the file if it does
+     * not exist — you'll need to write the header row first yourself if
+     * you want a header.
+     *
+     * @param path the file path
+     * @param row the row to append
+     * @return {@code true} on success
+     * @see #append(String, List, char)
+     * @see #addRow(String, List)
+     * @see #appendRow(String, List)
+     * @since 1.0.0
+     */
     public static boolean append(String path, List<String> row) {
         return append(path, row, ',');
     }
+
+    /**
+     * Alias of {@link #append(String, List)} — see that method for full
+     * documentation.
+     *
+     * @param path the file path
+     * @param row the row to append
+     * @return {@code true} on success
+     * @see #append(String, List)
+     * @since 1.0.0
+     */
     public static boolean addRow(String path, List<String> row) { return append(path, row); }
+
+    /**
+     * Alias of {@link #append(String, List)} — see that method for full
+     * documentation.
+     *
+     * @param path the file path
+     * @param row the row to append
+     * @return {@code true} on success
+     * @see #append(String, List)
+     * @since 1.0.0
+     */
     public static boolean appendRow(String path, List<String> row) { return append(path, row); }
 
+    /**
+     * Appends a single row with a custom delimiter.
+     *
+     * @param path the file path
+     * @param row the row to append
+     * @param delimiter the field separator character
+     * @return {@code true} on success
+     * @see #append(String, List)
+     * @since 1.0.0
+     */
     public static boolean append(String path, List<String> row, char delimiter) {
         if (row == null) return false;
         StringBuilder sb = new StringBuilder();
@@ -266,6 +733,19 @@ public final class CsvFile {
         }
     }
 
+    /**
+     * Writes a list of records (keyed by header) to the CSV file. The
+     * headers define both the column order and which keys are read from
+     * each record.
+     *
+     * @param path the file path
+     * @param records the records to write (may be null → just the header)
+     * @param headers the column headers, in order
+     * @return {@code true} on success
+     * @see #saveRecords(String, List, List)
+     * @see #writeTable(String, CsvTable)
+     * @since 1.0.0
+     */
     public static boolean writeRecords(String path, List<Map<String, String>> records, List<String> headers) {
         if (headers == null || headers.isEmpty()) return false;
         List<List<String>> rows = new ArrayList<>();
@@ -281,9 +761,33 @@ public final class CsvFile {
         }
         return write(path, rows);
     }
+
+    /**
+     * Alias of {@link #writeRecords(String, List, List)} — see that
+     * method for full documentation.
+     *
+     * @param path the file path
+     * @param r the records to write
+     * @param h the headers
+     * @return {@code true} on success
+     * @see #writeRecords(String, List, List)
+     * @since 1.0.0
+     */
     public static boolean saveRecords(String path, List<Map<String, String>> r, List<String> h) {
         return writeRecords(path, r, h);
     }
+
+    /**
+     * Writes a {@link CsvTable} to the CSV file — one call instead of
+     * {@code writeRecords(path, t.records(), t.headers())}.
+     *
+     * @param path the file path
+     * @param t the table to write (null → false)
+     * @return {@code true} on success
+     * @see CsvTable
+     * @see #writeRecords(String, List, List)
+     * @since 1.0.0
+     */
     public static boolean writeTable(String path, CsvTable t) {
         if (t == null) return false;
         return writeRecords(path, t.records(), t.headers());
@@ -321,7 +825,7 @@ public final class CsvFile {
                 rows.add(row);
                 row = new ArrayList<>();
             } else if (c == '\r') {
-                // skip
+                // skip — handled by the \n branch on the next character
             } else {
                 field.append(c);
             }

@@ -5,14 +5,42 @@ import chirp.internal.Capabilities;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * A tiny terminal spinner. Runs on a daemon thread; writes {@code \r} +
- * frame to {@link System#out} so it overwrites itself. Falls back to ASCII
- * frames when unicode is unavailable.
+ * A tiny terminal spinner for HTTP requests that take time.
  *
- * <p><b>Synchronization:</b> a private {@link #PRINT_LOCK} object serialises
- * output between the spinner thread and any other thread that needs to
- * clear the line. This avoids synchronising on {@code System.out}, whose
- * monitor is globally visible and exposed to hostile code.</p>
+ * <p>Runs on a daemon thread; writes {@code \r} + a frame character to
+ * {@link System#out} so it overwrites itself in place. Uses Unicode
+ * frames when the terminal supports them, ASCII {@code | / - \} frames
+ * otherwise.</p>
+ *
+ * <h2>Synchronization</h2>
+ * <p>A private {@link #PRINT_LOCK} serialises output between the spinner
+ * thread and any other thread that needs to clear the line. Using
+ * {@code System.out} as a monitor would globally expose the lock —
+ * another class that synchronises on {@code System.out} could
+ * accidentally hold it and cause a deadlock. The private lock avoids
+ * that entirely.</p>
+ *
+ * <h2>Usage</h2>
+ * <p>{@link HttpRequest} creates and stops spinners automatically when
+ * {@code .withSpinner()} is set — students rarely construct one
+ * directly.</p>
+ *
+ * <pre>{@code
+ * Spinner s = Spinner.start("Fetching data");
+ * try {
+ *     // ... do the slow thing ...
+ * } finally {
+ *     s.stop();
+ * }
+ * }</pre>
+ *
+ * <h2>Related</h2>
+ * <p>For a fuller-featured spinner with result-printing helpers, see
+ * {@link chirp.console.Loader}.</p>
+ *
+ * @see chirp.console.Loader
+ * @see HttpRequest#withSpinner()
+ * @since 1.0.0
  */
 public final class Spinner {
 
@@ -34,6 +62,16 @@ public final class Spinner {
         this.thread.setDaemon(true);
     }
 
+    /**
+     * Starts a spinner with the given label and returns it. The spinner
+     * runs on a daemon thread until {@link #stop()} is called.
+     *
+     * @param label the label to display next to the spinning frame (may
+     * be null → empty)
+     * @return the running spinner
+     * @see #stop()
+     * @since 1.0.0
+     */
     public static Spinner start(String label) {
         Spinner spinner = new Spinner(label);
         spinner.thread.start();
@@ -58,6 +96,13 @@ public final class Spinner {
         }
     }
 
+    /**
+     * Stops the spinner and clears its line from the terminal. Idempotent
+     * — calling twice is safe.
+     *
+     * @see #start(String)
+     * @since 1.0.0
+     */
     public void stop() {
         if (!running.compareAndSet(true, false)) return;
         try {

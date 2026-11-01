@@ -7,24 +7,64 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Detects — once, at class load — what the current terminal can do.
+ * Detects — once, at class load — what the current terminal supports:
+ * ANSI colour, Unicode glyphs, and 24-bit true colour.
  *
- * <p>Unicode detection on Windows is the tricky one: Java 18+ reports
- * {@code sun.stdout.encoding=UTF-8} even when the console codepage is still
- * 437/1251, so UTF-8 bytes get rendered as mojibake. The only reliable check
- * is to ask Windows for its active console codepage via {@code chcp}. If the
- * codepage is not 65001, unicode is disabled even though Java thinks the
- * output stream is UTF-8.</p>
+ * <p><b>Internal API.</b> Do not use directly. Use
+ * {@link chirp.config.Config#colorEnabled(boolean)},
+ * {@link chirp.startup.StartupConfig.Builder#noUnicode()}, and the
+ * {@link Glyphs} style selection instead. This class is the detection
+ * layer that those user-facing toggles consult.</p>
  *
- * <p>System property overrides:</p>
+ * <h2>Why detection is nontrivial</h2>
+ *
+ * <h3>Windows Unicode is the hard case</h3>
+ * <p>Java 18+ reports {@code sun.stdout.encoding=UTF-8} even when the
+ * Windows console codepage is still 437 or 1251 — so UTF-8 bytes get
+ * written correctly but rendered as mojibake. The only reliable check
+ * is to ask Windows for its active console codepage via {@code chcp}
+ * and verify it is 65001 (UTF-8). The {@link #isWindowsUtf8()} method
+ * does this — it is why the class is not a simple one-liner.</p>
+ *
+ * <h3>ANSI</h3>
+ * <p>On Unix, the presence of {@code TERM} (and its value not being
+ * {@code "dumb"}) is enough. On Windows, the presence of
+ * {@code WT_SESSION} (Windows Terminal) or {@code ConEmuANSI=ON}
+ * indicates a modern terminal; a plain {@code cmd.exe} without those
+ * is treated as non-ANSI. The {@code NO_COLOR} env var overrides
+ * everything.</p>
+ *
+ * <h3>True colour</h3>
+ * <p>{@code COLORTERM=truecolor} / {@code COLORTERM=24bit} or a
+ * {@code TERM} value containing {@code 256color} enables 24-bit RGB
+ * escapes. Absent those, {@link Ansi#rgb(int, int, int)} falls back
+ * to no-op.</p>
+ *
+ * <h2>System-property overrides</h2>
+ * <p>Every detection can be forced from the command line — useful for
+ * tests and for bypassing the heuristics when they guess wrong:</p>
  * <ul>
- *   <li>{@code -Dchirp.ansi=true|false}   — force ANSI on or off</li>
- *   <li>{@code -Dchirp.unicode=true|false} — force unicode on or off</li>
- *   <li>{@code -Dchirp.ascii=true}        — force ASCII (shorthand for unicode=false)</li>
+ *   <li>{@code -Dchirp.ansi=true|false} — force ANSI on or off</li>
+ *   <li>{@code -Dchirp.unicode=true|false} — force Unicode on or off</li>
+ *   <li>{@code -Dchirp.ascii=true} — force ASCII (shorthand for
+ *       unicode=false)</li>
  * </ul>
  *
- * <p>All case-insensitive comparisons use {@link Locale#ROOT} so behaviour is
- * identical on a Turkish-locale machine.</p>
+ * <h2>Test hook</h2>
+ * <p>{@link #setUnicodeOverride(Boolean)} overrides the Unicode result
+ * at runtime — used by the library's own tests to exercise both code
+ * paths without depending on the build machine's console.</p>
+ *
+ * <h2>Locale</h2>
+ * <p>All case-insensitive comparisons use {@link Locale#ROOT} so
+ * detection is identical on a Turkish-locale machine (where
+ * {@code "I".toLowerCase()} would otherwise produce the dotless
+ * {@code "ı"}).</p>
+ *
+ * @see Ansi
+ * @see Glyphs
+ * @see chirp.startup.StartupConfig
+ * @since 1.0.0
  */
 public final class Capabilities {
 
@@ -42,15 +82,51 @@ public final class Capabilities {
 
     private Capabilities() {}
 
+    /**
+     * Whether the terminal supports ANSI escape sequences. Detected once
+     * at class load — this method reports the cached result.
+     *
+     * @return {@code true} if ANSI is supported
+     * @see Ansi#isSupported()
+     * @since 1.0.0
+     */
     public static boolean ansi() { return ANSI; }
+
+    /**
+     * Whether the terminal supports 24-bit true-colour escape sequences.
+     * Requires ANSI support in addition to the {@code COLORTERM} /
+     * {@code TERM} signals.
+     *
+     * @return {@code true} if 24-bit RGB escapes will render correctly
+     * @see Ansi#rgb(int, int, int)
+     * @since 1.0.0
+     */
     public static boolean trueColor() { return ANSI && TRUE_COLOR; }
 
+    /**
+     * Whether the terminal can render Unicode glyphs. Respects the
+     * runtime override set by {@link #setUnicodeOverride(Boolean)} —
+     * once the override is set, this returns it instead of the
+     * class-load detection.
+     *
+     * @return {@code true} if Unicode glyphs are safe to emit
+     * @see Glyphs
+     * @see #setUnicodeOverride(Boolean)
+     * @since 1.0.0
+     */
     public static boolean unicode() {
         Boolean override = unicodeOverride;
         return override != null ? override : UNICODE;
     }
 
-    /** Force unicode on ({@code true}), off ({@code false}), or auto ({@code null}). */
+    /**
+     * Forces the Unicode result on ({@code true}), off
+     * ({@code false}), or back to the auto-detected value
+     * ({@code null}). Intended for tests.
+     *
+     * @param value the override, or {@code null} to clear it
+     * @since 1.0.0
+     */
     public static void setUnicodeOverride(Boolean value) {
         unicodeOverride = value;
     }

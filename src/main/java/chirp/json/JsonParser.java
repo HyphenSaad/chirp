@@ -5,9 +5,80 @@ import chirp.internal.Trace;
 /**
  * Recursive-descent JSON parser — zero external dependencies.
  *
- * <p>Trace integration: entry point logs input length, exit logs the root
- * value type; errors are logged to {@code json} category. Deep recursion is
- * not traced by default to avoid overwhelming output.</p>
+ * <p>The implementation behind {@link Json#parse(String)},
+ * {@link Json#parseObject(String)}, and {@link Json#parseArray(String)}.
+ * Most callers should use the facade; this class is public so that
+ * tests can exercise the parser directly and so that a caller who needs
+ * a {@link JsonObject} or {@link JsonArray} at the top level can call
+ * the specialised methods without re-checking the type.</p>
+ *
+ * <h2>What it parses</h2>
+ * <p>The full JSON grammar from RFC 8259 — objects, arrays, strings,
+ * numbers, {@code true}, {@code false}, {@code null} — with:</p>
+ * <ul>
+ *   <li><b>Recursive descent</b> — no lookahead tables, no regex,
+ *       just one method per grammar rule. Straightforward to read and
+ *       extend.</li>
+ *   <li><b>Correct escape handling</b> — {@code \" \\ \/ \b \f \n \r \t}
+ *       and {@code \}{@code uXXXX} Unicode escapes are decoded.</li>
+ *   <li><b>Correct number parsing</b> — the raw token is preserved
+ *       (in {@link JsonNumber}) so large integers do not lose
+ *       precision on round-trip.</li>
+ *   <li><b>Strict validation</b> — trailing content after the top-level
+ *       value, control characters inside strings, and malformed escapes
+ *       all throw {@link JsonException} with a position that points at
+ *       the offending character.</li>
+ * </ul>
+ *
+ * <h2>What it does not parse</h2>
+ * <ul>
+ *   <li><b>Comments</b> — JSON does not allow them. Input with
+*       {@code //} or {@code multi-line-comment} throws.</li>
+ *   <li><b>Trailing commas</b> — JSON does not allow them. Input with
+ *       {@code [1, 2, 3,]} throws.</li>
+ *   <li><b>Single quotes</b> — JSON requires double quotes for strings.
+ *       Input with {@code {'a': 1}} throws.</li>
+ *   <li><b>NaN / Infinity</b> — not JSON numbers. Use the string form
+ *       {@code "NaN"} if you need to convey those.</li>
+ * </ul>
+ *
+ * <h2>Trace integration</h2>
+ * <p>Entry and exit are logged to the {@code json} trace category with
+ * input length and root type respectively. Errors are logged at WARN
+ * level before throwing. Deep recursion is <b>not</b> traced — a
+ * deeply nested object would otherwise flood the trace output with one
+ * line per level. The entry/exit/error lines are enough to diagnose a
+ * parse failure without turning trace into a JSON dump.</p>
+ *
+ * <h2>Example — parse the whole document</h2>
+ * <pre>{@code
+ * JsonValue value = JsonParser.parse("{ \"name\": \"Saad\", \"age\": 20 }");
+ * JsonObject obj = value.asObject();
+ * System.out.println(obj.getString("name"));  // "Saad"
+ * }</pre>
+ *
+ * <h2>Example — parse into a typed top-level</h2>
+ * <pre>{@code
+ * JsonObject config = JsonParser.parseObject(configText);
+ * JsonArray items = JsonParser.parseArray(itemsText);
+ * // Both throw JsonException with a clear message if the root type
+ * // does not match — useful for fail-fast validation.
+ * }</pre>
+ *
+ * <h2>Error messages</h2>
+ * <p>Every error includes the byte position where the parse failed:
+ * {@code "Expected string key at position 12"}, {@code "Unterminated
+ * string"}, {@code "Unexpected trailing content at position 47"}. The
+ * position points at the first character that does not match the
+ * expected grammar — good enough to eyeball the input and see what is
+ * wrong.</p>
+ *
+ * @see Json
+ * @see JsonValue
+ * @see JsonObject
+ * @see JsonArray
+ * @see JsonWriter
+ * @since 1.0.0
  */
 public final class JsonParser {
 
@@ -16,6 +87,18 @@ public final class JsonParser {
 
     private JsonParser(String input) { this.input = input; }
 
+    /**
+     * Parses a complete JSON value from the given text. The text must
+     * contain exactly one value — trailing whitespace is allowed, any
+     * other trailing content throws.
+     *
+     * @param text the JSON text (must not be null or empty)
+     * @return the parsed value
+     * @throws JsonException if {@code text} is null, empty, or malformed
+     * @see #parseObject(String)
+     * @see #parseArray(String)
+     * @since 1.0.0
+     */
     public static JsonValue parse(String text) {
         Trace.trace("json", "parse(input.len={})", text == null ? 0 : text.length());
         if (text == null) {
@@ -38,6 +121,19 @@ public final class JsonParser {
         return value;
     }
 
+    /**
+     * Parses a JSON object from the given text. The root value must be
+     * an object — a top-level array, string, number, boolean, or
+     * {@code null} throws.
+     *
+     * @param text the JSON text
+     * @return the parsed object
+     * @throws JsonException if the input is malformed or the root is
+     * not an object
+     * @see #parse(String)
+     * @see #parseArray(String)
+     * @since 1.0.0
+     */
     public static JsonObject parseObject(String text) {
         JsonValue value = parse(text);
         if (!(value instanceof JsonObject object)) {
@@ -47,6 +143,19 @@ public final class JsonParser {
         return object;
     }
 
+    /**
+     * Parses a JSON array from the given text. The root value must be
+     * an array — a top-level object, string, number, boolean, or
+     * {@code null} throws.
+     *
+     * @param text the JSON text
+     * @return the parsed array
+     * @throws JsonException if the input is malformed or the root is
+     * not an array
+     * @see #parse(String)
+     * @see #parseObject(String)
+     * @since 1.0.0
+     */
     public static JsonArray parseArray(String text) {
         JsonValue value = parse(text);
         if (!(value instanceof JsonArray array)) {
@@ -154,7 +263,7 @@ public final class JsonParser {
                         try {
                             sb.append((char) Integer.parseInt(hex, 16));
                         } catch (NumberFormatException e) {
-                            throw new JsonException("Invalid unicode escape: " + hex, e);
+                            throw new JsonException("Invalid unicode escape: " + hex);
                         }
                     }
                     default -> throw new JsonException("Invalid escape: \\" + esc);
