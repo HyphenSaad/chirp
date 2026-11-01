@@ -184,7 +184,7 @@ public final class KeyBindings {
                 return KeyCode.PLUS;
             case "-", "minus", "subtract" :
                 return KeyCode.MINUS;
-            default: {
+            default : {
                 // Fall through to single-letter handling below.
             }
         }

@@ -45,7 +45,9 @@ public final class Ui {
     // ============================================================== entry point
 
     /** Starts JavaFX (once) and runs {@code entry} on the FX thread. */
-    public static void app(Runnable entry) { launch(entry, null); }
+    public static void app(Runnable entry) {
+        launch(entry, null);
+    }
     public static void launch(Runnable entry) { launch(entry, null); }
     public static void start(Runnable entry) { launch(entry, null); }
     public static void run(Runnable entry) { launch(entry, null); }

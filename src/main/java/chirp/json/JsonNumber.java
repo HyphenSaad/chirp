@@ -40,7 +40,7 @@ public final class JsonNumber implements JsonValue {
 
     @Override
     public long asLong() { return (long) asDouble(); }
-    
+
     @Override
     public int asInt() { return (int) asDouble(); }
 

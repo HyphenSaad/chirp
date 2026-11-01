@@ -132,7 +132,7 @@ public final class NumberChain {
     public String formatted() { return String.format(Locale.ENGLISH, "%.2f", value); }
     public String formatted(int decimals) { return Numbers.format(value, decimals); }
     public String asString() { return formatted(); }
-    
+
     @Override
     public String toString() { return formatted(); }
 
