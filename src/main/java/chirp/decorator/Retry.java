@@ -131,7 +131,19 @@ public final class Retry {
 
     // -------------------------------------------------------------- terminals
 
-    /** Executes a {@code Supplier}, retrying on failure. Returns the last successful value. */
+    /**
+     * Executes a {@code Supplier}, retrying on failure. Returns the last
+     * successful value.
+     *
+     * <p>The {@code catch (Throwable t)} is deliberate and documented in the
+     * class Javadoc: a retry policy must survive {@link Error} (e.g. a
+     * {@code StackOverflowError} thrown by user code under retry) as well
+     * as {@link Exception}, because retrying is the entire purpose of this
+     * method and swallowing an Error would silently lose the retry attempt.
+     * See {@code RetryTest} for the tests that verify non-Exception throws
+     * still surface correctly after all attempts.</p>
+     */
+    @SuppressWarnings("PMD.AvoidCatchingThrowable")
     public <T> T execute(Supplier<T> supplier) {
         if (supplier == null) return null;
         Throwable last = null;
