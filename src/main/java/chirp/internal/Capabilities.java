@@ -1,7 +1,9 @@
 package chirp.internal;
 
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -20,6 +22,9 @@ import java.util.concurrent.TimeUnit;
  *   <li>{@code -Dchirp.unicode=true|false} — force unicode on or off</li>
  *   <li>{@code -Dchirp.ascii=true}        — force ASCII (shorthand for unicode=false)</li>
  * </ul>
+ *
+ * <p>All case-insensitive comparisons use {@link Locale#ROOT} so behaviour is
+ * identical on a Turkish-locale machine.</p>
  */
 public final class Capabilities {
 
@@ -62,7 +67,7 @@ public final class Capabilities {
         if (emulator != null && emulator.contains("JetBrains")) return true;
         String term = System.getenv("TERM");
         if (term != null && !term.isBlank() && !"dumb".equalsIgnoreCase(term)) return true;
-        String os = System.getProperty("os.name", "").toLowerCase();
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         return !os.contains("win");
     }
 
@@ -75,20 +80,20 @@ public final class Capabilities {
         if (override != null) return Boolean.parseBoolean(override);
 
         // 2. Platform-specific detection
-        String os = System.getProperty("os.name", "").toLowerCase();
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("win")) {
             // Windows: trust ONLY the console codepage, not sun.stdout.encoding
             return isWindowsUtf8();
         }
 
         // 3. Unix / macOS: sun.stdout.encoding is authoritative
-        String stdoutEnc = System.getProperty("sun.stdout.encoding", "").toLowerCase();
+        String stdoutEnc = System.getProperty("sun.stdout.encoding", "").toLowerCase(Locale.ROOT);
         if (!stdoutEnc.isEmpty()) return stdoutEnc.contains("utf");
 
         try {
-            String name = Charset.defaultCharset().name().toLowerCase();
+            String name = Charset.defaultCharset().name().toLowerCase(Locale.ROOT);
             return name.contains("utf-8") || name.contains("utf8");
-        } catch (Exception ignored) {}
+        } catch (RuntimeException ignored) {}
 
         // macOS and Linux terminals are UTF-8 by default
         return true;
@@ -99,8 +104,9 @@ public final class Capabilities {
      * Cached at class load — safe to call repeatedly thereafter.
      */
     private static boolean isWindowsUtf8() {
+        Process process = null;
         try {
-            Process process = new ProcessBuilder("cmd", "/c", "chcp")
+            process = new ProcessBuilder("cmd", "/c", "chcp")
                     .redirectErrorStream(true)
                     .start();
             byte[] bytes = process.getInputStream().readAllBytes();
@@ -111,18 +117,23 @@ public final class Capabilities {
             }
             String output = new String(bytes, StandardCharsets.ISO_8859_1);
             return output.contains("65001");
-        } catch (Exception e) {
+        } catch (IOException e) {
             return false; // safest fallback on Windows
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } finally {
+            if (process != null) process.destroy();
         }
     }
 
     private static boolean detectTrueColor() {
         String colorTerm = System.getenv("COLORTERM");
         if (colorTerm != null) {
-            String lower = colorTerm.toLowerCase();
+            String lower = colorTerm.toLowerCase(Locale.ROOT);
             if (lower.contains("truecolor") || lower.contains("24bit")) return true;
         }
         String term = System.getenv("TERM");
-        return term != null && term.toLowerCase().contains("256color");
+        return term != null && term.toLowerCase(Locale.ROOT).contains("256color");
     }
 }

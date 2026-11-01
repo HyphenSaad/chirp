@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Minimal but correct SMTP client — supports SMTPS (port 465), STARTTLS
@@ -19,6 +20,14 @@ import java.util.List;
  * multi-line responses, and CRLF discipline.
  *
  * <p><strong>Internal API.</strong> Students use {@link Email}.</p>
+ *
+ * <h2>Resource management</h2>
+ * <p>The raw socket is managed by the outer try-with-resources. On the STARTTLS
+ * path, the layered SSL socket is opened in its own nested try-with-resources
+ * with {@code autoClose=true}, so closing it also closes the underlying raw
+ * socket. The {@link BufferedReader} and {@link PrintWriter} wrapping each
+ * socket's streams are closed transitively by their socket's close — this is
+ * why they are not themselves in a try-with-resources.</p>
  */
 final class SmtpClient {
 
@@ -46,12 +55,10 @@ final class SmtpClient {
         this.log = log;
     }
 
+    @SuppressWarnings("PMD.CloseResource") // BufferedReader/Writer wrap the socket's streams; closing the socket closes them.
     void send(String from, List<String> to, String rawMessage) throws IOException {
-        Socket socket = null;
-        try {
-            socket = ssl ? createSslSocket() : new Socket(host, port);
+        try (Socket socket = openSocket()) {
             socket.setSoTimeout(TIMEOUT_MS);
-
             BufferedReader in = newReader(socket);
             PrintWriter out = newWriter(socket);
 
@@ -60,42 +67,60 @@ final class SmtpClient {
             List<String> ehlo = expect(in, 250);
 
             if (starttls) {
-                boolean supportsTls = ehlo.stream().anyMatch(l -> l.toUpperCase().contains("STARTTLS"));
+                boolean supportsTls = ehlo.stream()
+                        .anyMatch(l -> l.toUpperCase(Locale.ROOT).contains("STARTTLS"));
                 if (!supportsTls) throw new IOException("Server does not advertise STARTTLS");
                 command(out, "STARTTLS");
                 expect(in, 220);
-                socket = upgradeToSsl(socket);
-                in = newReader(socket);
-                out = newWriter(socket);
-                command(out, "EHLO " + localHostname());
-                expect(in, 250);
+
+                // Layered SSL socket — created with autoClose=true, so closing
+                // this socket closes the wrapped raw socket too. The outer
+                // try-with-resources' socket.close() is then a harmless no-op.
+                try (Socket upgraded = upgradeToSsl(socket)) {
+                    BufferedReader upgradedIn = newReader(upgraded);
+                    PrintWriter upgradedOut = newWriter(upgraded);
+                    command(upgradedOut, "EHLO " + localHostname());
+                    expect(upgradedIn, 250);
+                    conversation(from, to, rawMessage, upgradedIn, upgradedOut);
+                }
+            } else {
+                conversation(from, to, rawMessage, in, out);
             }
-
-            if (username != null && password != null) {
-                authenticate(out, in);
-            }
-
-            command(out, "MAIL FROM:<" + from + ">");
-            expect(in, 250);
-
-            for (String recipient : to) {
-                command(out, "RCPT TO:<" + recipient + ">");
-                expectAny(in, 250, 251);
-            }
-
-            command(out, "DATA");
-            expect(in, 354);
-            writeData(out, rawMessage);
-            command(out, ".");
-            expect(in, 250);
-
-            command(out, "QUIT");
-            // 221 usually, but be lenient
-        } finally {
-            if (socket != null) try {
-                socket.close();
-            } catch (IOException ignored) {}
         }
+    }
+
+    private Socket openSocket() throws IOException {
+        if (ssl) {
+            SSLSocketFactory f = (SSLSocketFactory) SSLSocketFactory.getDefault();
+            return f.createSocket(host, port);
+        }
+        return new Socket(host, port);
+    }
+
+    // ---------------------------------------------------- conversation
+
+    private void conversation(String from, List<String> to, String rawMessage,
+            BufferedReader in, PrintWriter out) throws IOException {
+        if (username != null && password != null) {
+            authenticate(out, in);
+        }
+
+        command(out, "MAIL FROM:<" + from + ">");
+        expect(in, 250);
+
+        for (String recipient : to) {
+            command(out, "RCPT TO:<" + recipient + ">");
+            expectAny(in, 250, 251);
+        }
+
+        command(out, "DATA");
+        expect(in, 354);
+        writeData(out, rawMessage);
+        command(out, ".");
+        expect(in, 250);
+
+        command(out, "QUIT");
+        // 221 usually, but be lenient
     }
 
     // ---------------------------------------------------- auth
@@ -120,7 +145,7 @@ final class SmtpClient {
     }
 
     private void command(PrintWriter out, String line) {
-        log(out, "C: " + line);
+        log("C: " + line);
         out.print(line + "\r\n");
         out.flush();
     }
@@ -146,7 +171,7 @@ final class SmtpClient {
         List<String> lines = new ArrayList<>();
         String line;
         while ((line = in.readLine()) != null) {
-            log(in, "S: " + line);
+            log("S: " + line);
             lines.add(line);
             if (line.length() >= 4 && line.charAt(3) == ' ') break;
             if (line.length() < 4) break;
@@ -180,26 +205,20 @@ final class SmtpClient {
         out.flush();
     }
 
-    private void log(PrintWriter out, String line) {
+    private void log(String line) {
         if (log != null) log.add(line);
-        if (listener != null) try {
-            listener.onSmtpEvent(line);
-        } catch (Exception ignored) {}
-    }
-
-    private void log(BufferedReader in, String line) {
-        if (log != null) log.add(line);
-        if (listener != null) try {
-            listener.onSmtpEvent(line);
-        } catch (Exception ignored) {}
+        if (listener != null) {
+            try {
+                listener.onSmtpEvent(line);
+            } catch (RuntimeException e) {
+                // Listener is best-effort — record the failure in the SMTP log
+                // so it does not vanish silently, but never break the send.
+                if (log != null) log.add("! listener threw on onSmtpEvent: " + e.getMessage());
+            }
+        }
     }
 
     // ---------------------------------------------------- sockets
-
-    private Socket createSslSocket() throws IOException {
-        SSLSocketFactory f = (SSLSocketFactory) SSLSocketFactory.getDefault();
-        return f.createSocket(host, port);
-    }
 
     private Socket upgradeToSsl(Socket plain) throws IOException {
         SSLSocketFactory f = (SSLSocketFactory) SSLSocketFactory.getDefault();
@@ -209,7 +228,7 @@ final class SmtpClient {
     private static String localHostname() {
         try {
             return InetAddress.getLocalHost().getHostName();
-        } catch (Exception e) {
+        } catch (IOException e) {
             return "localhost";
         }
     }

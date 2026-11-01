@@ -165,8 +165,8 @@ public final class UiStyle {
         if (fontFamily != null && !fontFamily.isBlank())
             css.append("-fx-font-family: \"").append(fontFamily).append("\";");
         if (primaryColor != null && !primaryColor.isBlank()) {
-            css.append("-fx-accent: ").append(primaryColor).append(";");
-            css.append("-fx-focus-color: ").append(primaryColor).append(";");
+            css.append("-fx-accent: ").append(primaryColor).append(';');
+            css.append("-fx-focus-color: ").append(primaryColor).append(';');
             css.append("-fx-faint-focus-color: ").append(primaryColor).append("22;");
         }
         root.setStyle(css.toString());

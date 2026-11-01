@@ -26,14 +26,17 @@ import java.util.concurrent.atomic.AtomicInteger;
  * {@code send / execute / call / fire / make}; {@code sendOrThrow / executeOrThrow};
  * {@code sendAsync / sendAsync / execAsync}; {@code sendWithRetry / execWithRetry}.</p>
  *
- * <h2>Key-value factory</h2>
- * <p>{@link Http.Key} drives {@code Http.of(Key.METHOD, GET, Key.URL, "...", ...)}.</p>
- *
  * <h2>Retry integration</h2>
  * <p>{@link #sendWithRetry(int)} combines this request with
  * {@link chirp.decorator.Retry} — retries on transport failures only (5xx
  * errors are returned to the caller, not retried, since retrying a 500 is
  * usually wrong for a beginner).</p>
+ *
+ * <h2>Listener exception policy</h2>
+ * <p>Listener callbacks are best-effort: a broken listener must never break
+ * the request. Exceptions from listeners are logged via
+ * {@link Trace#warn(String, String)} so they surface when tracing is
+ * enabled, and are otherwise ignored.</p>
  */
 public final class HttpRequest {
 
@@ -46,8 +49,8 @@ public final class HttpRequest {
     private final List<Map.Entry<String, String>> queryParams = new ArrayList<>();
     private String body;
     private Duration timeout = Duration.ofSeconds(30);
-    private boolean spinner;
-    private boolean verbose = Boolean.parseBoolean(System.getProperty("chirp.http.verbose", "false"));
+    private volatile boolean spinner;
+    private volatile boolean verbose = Boolean.parseBoolean(System.getProperty("chirp.http.verbose", "false"));
     private String saveRaw;
     private HttpListener listener;
 
@@ -239,7 +242,9 @@ public final class HttpRequest {
             if (saveRaw != null) {
                 try {
                     TextFileIO.write(saveRaw, response.text());
-                } catch (Exception ignored) {}
+                } catch (RuntimeException e) {
+                    Trace.warn("http", "saveRaw failed: " + e.getMessage());
+                }
             }
 
             return response;
@@ -300,9 +305,13 @@ public final class HttpRequest {
             if (r.hasTransportError()) {
                 HttpException cause = new HttpException(r.statusText());
                 // onRetry fires only when another attempt will actually follow
-                if (listener != null && current < maxAttempts) try {
-                    listener.onRetry(this, current, cause);
-                } catch (Exception ignored) {}
+                if (listener != null && current < maxAttempts) {
+                    try {
+                        listener.onRetry(this, current, cause);
+                    } catch (RuntimeException e) {
+                        Trace.warn("http", "onRetry listener threw: " + e.getMessage());
+                    }
+                }
                 throw cause;
             }
             return r;
@@ -367,31 +376,41 @@ public final class HttpRequest {
         if (listener == null) return;
         try {
             listener.onStart(this);
-        } catch (Exception ignored) {}
+        } catch (RuntimeException e) {
+            Trace.warn("http", "onStart listener threw: " + e.getMessage());
+        }
     }
     private void notifyComplete(HttpResponse r) {
         if (listener == null) return;
         try {
             listener.onComplete(r);
-        } catch (Exception ignored) {}
+        } catch (RuntimeException e) {
+            Trace.warn("http", "onComplete listener threw: " + e.getMessage());
+        }
     }
     private void notifySuccess(HttpResponse r) {
         if (listener == null) return;
         try {
             listener.onSuccess(r);
-        } catch (Exception ignored) {}
+        } catch (RuntimeException e) {
+            Trace.warn("http", "onSuccess listener threw: " + e.getMessage());
+        }
     }
     private void notifyFailure(Throwable t) {
         if (listener == null) return;
         try {
             listener.onFailure(this, t);
-        } catch (Exception ignored) {}
+        } catch (RuntimeException e) {
+            Trace.warn("http", "onFailure listener threw: " + e.getMessage());
+        }
     }
     private void notifyRedirect(HttpResponse r) {
         if (listener == null) return;
         try {
             listener.onRedirect(r);
-        } catch (Exception ignored) {}
+        } catch (RuntimeException e) {
+            Trace.warn("http", "onRedirect listener threw: " + e.getMessage());
+        }
     }
     /** Reports a request that failed before reaching the network (missing or invalid URL). */
     private HttpResponse notifyEarlyFailure(HttpResponse r, Throwable cause) {

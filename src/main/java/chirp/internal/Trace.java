@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -21,6 +22,10 @@ import java.util.concurrent.atomic.AtomicLong;
  *   [INFO]  ℹ  green
  *   [WARN]  ⚠  yellow
  * </pre>
+ *
+ * <p><b>Synchronization:</b> a private {@link #WRITE_LOCK} serialises stderr
+ * writes between caller threads. Using {@code System.err} as the monitor
+ * would expose the class to code that also synchronises on stderr.</p>
  */
 public final class Trace {
 
@@ -30,10 +35,13 @@ public final class Trace {
     private static final AtomicLong COUNTER = new AtomicLong();
     private static final Set<String> ENABLED_CATEGORIES = ConcurrentHashMap.newKeySet();
 
+    /** Private lock — stderr serialization without exposing {@code System.err}. */
+    private static final Object WRITE_LOCK = new Object();
+
     public static final List<String> KNOWN_CATEGORIES = Collections.unmodifiableList(Arrays.asList(
             "input", "reader", "strict", "rule", "search", "filter", "page",
             "text", "numbers", "format", "datetime", "file", "csv", "json",
-            "session", "config", "stats", "console", "menu", "startup"));
+            "session", "config", "stats", "console", "menu", "startup", "loader", "http"));
 
     private static volatile boolean enabled = Boolean.parseBoolean(System.getProperty("chirp.trace", "false"));
     private static volatile Level minimumLevel = Level.TRACE;
@@ -57,16 +65,17 @@ public final class Trace {
     }
 
     public static void enableCategory(String category) {
-        if (category != null) ENABLED_CATEGORIES.add(category.toLowerCase());
+        if (category != null) ENABLED_CATEGORIES.add(category.toLowerCase(Locale.ROOT));
     }
     public static void disableCategory(String category) {
-        if (category != null) ENABLED_CATEGORIES.remove(category.toLowerCase());
+        if (category != null) ENABLED_CATEGORIES.remove(category.toLowerCase(Locale.ROOT));
     }
 
     public static void enableOnly(String... categories) {
         allCategoriesEnabled = false;
         ENABLED_CATEGORIES.clear();
-        if (categories != null) for (String c : categories) if (c != null) ENABLED_CATEGORIES.add(c.toLowerCase());
+        if (categories != null)
+            for (String c : categories) if (c != null) ENABLED_CATEGORIES.add(c.toLowerCase(Locale.ROOT));
     }
 
     public static void enableAllCategories() {
@@ -154,16 +163,15 @@ public final class Trace {
         if (!enabled) return false;
         if (level.ordinal() < minimumLevel.ordinal()) return false;
         if (allCategoriesEnabled) return true;
-        return category != null && ENABLED_CATEGORIES.contains(category.toLowerCase());
+        return category != null && ENABLED_CATEGORIES.contains(category.toLowerCase(Locale.ROOT));
     }
 
     private static void write(Level level, String category, String message) {
         long id = COUNTER.incrementAndGet();
         String time = LocalTime.now().format(TIME);
-        String cat = (category == null ? "general" : category).toLowerCase();
+        String cat = (category == null ? "general" : category).toLowerCase(Locale.ROOT);
         if (cat.length() > 8) cat = cat.substring(0, 8);
 
-        // Colour + glyph per level
         String colour;
         String glyph;
         switch (level) {
@@ -197,10 +205,9 @@ public final class Trace {
                 colour, cat, reset,
                 message);
 
-        // Prepend glyph
         String rendered = colour + glyph + " " + reset + line;
 
-        synchronized (System.err) {
+        synchronized (WRITE_LOCK) {
             System.err.println(rendered);
         }
     }
@@ -223,7 +230,7 @@ public final class Trace {
                 }
             }
             return sb.toString();
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return "<format error: " + e.getClass().getSimpleName() + "> " + format;
         }
     }
@@ -243,7 +250,7 @@ public final class Trace {
         try {
             String text = String.valueOf(arg);
             return text.length() > 60 ? text.substring(0, 57) + "..." : text;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return "<unprintable: " + e.getClass().getSimpleName() + ">";
         }
     }
@@ -259,7 +266,7 @@ public final class Trace {
         try {
             String text = String.valueOf(arg);
             return text.length() > 80 ? text.substring(0, 77) + "..." : text;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return "<unprintable: " + e.getClass().getSimpleName() + ">";
         }
     }

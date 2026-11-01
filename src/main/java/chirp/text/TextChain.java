@@ -1,5 +1,6 @@
 package chirp.text;
 
+import java.util.Locale;
 import java.util.function.UnaryOperator;
 
 /**
@@ -17,7 +18,8 @@ import java.util.function.UnaryOperator;
  * }</pre>
  *
  * <p>Every method is null-safe; null inputs propagate through unchanged.
- * Chains are immutable and thread-safe.</p>
+ * Chains are immutable and thread-safe. Case transformations use
+ * {@link Locale#ROOT} so results are identical across locales.</p>
  */
 public final class TextChain {
 
@@ -41,7 +43,7 @@ public final class TextChain {
     public TextChain toUpperCase() {
         return new TextChain(() -> {
             String v = source.get();
-            return v == null ? null : v.toUpperCase();
+            return v == null ? null : v.toUpperCase(Locale.ROOT);
         });
     }
     public TextChain upper() { return toUpperCase(); }
@@ -49,7 +51,7 @@ public final class TextChain {
     public TextChain toLowerCase() {
         return new TextChain(() -> {
             String v = source.get();
-            return v == null ? null : v.toLowerCase();
+            return v == null ? null : v.toLowerCase(Locale.ROOT);
         });
     }
     public TextChain lower() { return toLowerCase(); }
@@ -114,5 +116,7 @@ public final class TextChain {
     public String get() { return source.get(); }
     public String value() { return source.get(); }
     public String result() { return source.get(); }
+
+    @Override
     public String toString() { return source.get(); }
 }

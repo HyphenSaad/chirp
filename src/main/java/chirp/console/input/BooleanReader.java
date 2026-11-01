@@ -4,11 +4,18 @@ import chirp.console.Input;
 import chirp.console.Messenger;
 import chirp.internal.Trace;
 
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Predicate;
 
 /**
  * Fluent boolean reader. Uses {@link Input#readRaw(String)} internally.
+ *
+ * <p><b>Strict mode:</b> a boolean answer ({@code y/n}) has no range, length,
+ * blank, or format dimension to be strict about — so this reader never emits
+ * strict warnings. {@link #lenient()} exists purely for API symmetry with the
+ * other readers and is a documented no-op; it will not change any future
+ * behaviour either.</p>
  */
 public final class BooleanReader {
 
@@ -17,7 +24,6 @@ public final class BooleanReader {
     private String helpText;
     private Predicate<Boolean> customValidator;
     private String customError;
-    private boolean lenient = false;
 
     private static final Set<String> TRUTHY = Set.of("y", "yes", "true", "1", "yeah", "yep", "ok");
     private static final Set<String> FALSY = Set.of("n", "no", "false", "0", "nah", "nope");
@@ -57,7 +63,11 @@ public final class BooleanReader {
         return this;
     }
 
-    public BooleanReader lenient() { this.lenient = true; return this; }
+    /**
+     * No-op — kept for fluent-API symmetry with the other readers.
+     * BooleanReader never emits strict warnings, so there is nothing to relax.
+     */
+    public BooleanReader lenient() { return this; }
     public BooleanReader noStrict() { return lenient(); }
 
     public boolean read() {
@@ -65,7 +75,7 @@ public final class BooleanReader {
         if (helpText != null) System.out.println(helpText);
 
         while (true) {
-            String raw = Input.readRaw(label + " (y/n)").toLowerCase();
+            String raw = Input.readRaw(label + " (y/n)").toLowerCase(Locale.ROOT);
             Trace.value("reader", "raw input", raw);
 
             if (raw.isEmpty() && defaultValue != null) {

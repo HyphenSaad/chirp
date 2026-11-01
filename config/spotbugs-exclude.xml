@@ -10,4 +10,244 @@
         xmlns="https://github.com/spotbugs/filter/3.0.0"
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="https://github.com/spotbugs/filter/3.0.0 https://raw.githubusercontent.com/spotbugs/spotbugs/3.1.0/spotbugs/etc/findbugsfilter.xsd">
+
+    <!--
+      1. chirp.ui.* classes are fluent wrappers around JavaFX controls.
+         They intentionally share the simple name of their superclass so
+         that `Button.primary("Save")` autocompletes to `chirp.ui.Button`
+         and still returns a valid JavaFX Node. Renaming them would break
+         the whole chirp.ui package.
+    -->
+    <Match>
+        <Class name="~chirp\.ui\..*"/>
+        <Bug pattern="NM_SAME_SIMPLE_NAME_AS_SUPERCLASS"/>
+    </Match>
+
+    <!--
+      2. printf-style format strings are part of the public API. Console.printf(fmt, args),
+         Format.fmt(fmt, kv), Numbers.format(v, kv), and Debug.logf pass the format
+         string straight to String.format by design.
+    -->
+    <Match>
+        <Bug pattern="FORMAT_STRING_MANIPULATION"/>
+    </Match>
+
+    <!--
+      3. Chirp's contract is one unchecked exception type per module:
+         ChirpNotStartedException, HttpException, EmailException, JsonException,
+         EaseException, RetryInterruptedException. Student code should not be
+         forced to declare throws clauses just to use a helper.
+    -->
+    <Match>
+        <Bug pattern="THROWS_METHOD_THROWS_RUNTIMEEXCEPTION"/>
+    </Match>
+
+    <!--
+      4. Connectivity helpers (Http.canReach, Email.canConnect, EmailRequest.test,
+         SmtpClient's plain socket) open TCP to check reachability and never
+         carry user data. Wrapping in SSLSocket would add latency without
+         adding security to what is a ping test.
+    -->
+    <Match>
+        <Bug pattern="UNENCRYPTED_SOCKET"/>
+    </Match>
+
+    <!--
+      5. Hyperlink.browse launches the system browser with a user-supplied URL.
+         The URL is passed as a discrete ProcessBuilder argument (rundll32 /
+         open / xdg-open); it is never interpreted by a shell.
+    -->
+    <Match>
+        <Class name="chirp.ui.Hyperlink"/>
+        <Bug pattern="COMMAND_INJECTION"/>
+    </Match>
+
+    <!--
+      6. File, CSV, JSON, and text APIs accept file paths by design — that's
+         the entire point of the chirp.io and chirp.json modules.
+    -->
+    <Match>
+        <Bug pattern="PATH_TRAVERSAL_IN"/>
+    </Match>
+
+    <!--
+      7. Session and ChirpLifecycle are the singleton state of the library.
+         Session.me() returns a mutable fluent profile — that's the API.
+         ChirpLifecycle.config()/sampler() expose the startup state that
+         diagnostics need.
+    -->
+    <Match>
+        <Bug pattern="MS_EXPOSE_REP"/>
+    </Match>
+
+    <!--
+      8. UI wrappers call fluent setters from their own private constructors.
+         All twelve classes have private constructors and are effectively
+         sealed; adding `final` for spotbugs alone would be a pure noise commit.
+    -->
+    <Match>
+        <Class name="~chirp\.ui\..*"/>
+        <Bug pattern="MC_OVERRIDABLE_METHOD_CALL_IN_CONSTRUCTOR"/>
+    </Match>
+
+    <!--
+      9. Field's constructor initialises all listeners before any code can
+         subclass Field — the class is effectively sealed by its private
+         constructor.
+    -->
+    <Match>
+        <Class name="chirp.ui.Field"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
+    <!--
+      10. Defensive catch blocks at library boundaries. Helpers such as
+          ImageView.url, Hyperlink.browse, EmailRequest.test, Http.pingUrl,
+          Capabilities.detectUnicode deliberately catch a broad exception
+          type so a platform quirk never escapes a helper. Not a bug.
+    -->
+    <Match>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
+    <!--
+      11. When Ui.app(..) throws during startup we print the stack trace
+          deliberately: student code needs the trace to debug its own
+          application. The library never echoes user input here.
+    -->
+    <Match>
+        <Class name="chirp.ui.Ui"/>
+        <Bug pattern="INFORMATION_EXPOSURE_THROUGH_AN_ERROR_MESSAGE"/>
+    </Match>
+
+    <!--
+      12. Field.input() returns the underlying JavaFX control so callers can
+          attach listeners, validators, and focus requests to it. That is
+          the documented escape hatch of the Field composite.
+    -->
+    <Match>
+        <Class name="chirp.ui.Field"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
+    <!--
+      13. `d == Math.rint(d)` in Numbers.isInteger / NumberChain.isInteger is
+          the correct mathematical test for integer-valued double. Any other
+          comparison would be wrong.
+    -->
+    <Match>
+        <Bug pattern="FE_FLOATING_POINT_EQUALITY"/>
+    </Match>
+
+    <!--
+      14. Separator.resolveToken has deliberate alias branches: ASCII_SOLID
+          and ASCII_DASHED both resolve to "-". That's the point of aliases.
+    -->
+    <Match>
+        <Class name="chirp.console.Separator"/>
+        <Bug pattern="DB_DUPLICATE_SWITCH_CLAUSES"/>
+    </Match>
+
+    <!--
+      15. TextFile.fileName() and EmailRequest$Attachment.filename() are
+          intentionally named for clarity in their own modules. Merging them
+          would hurt readability more than the name-confusion it would remove.
+    -->
+    <Match>
+        <Class name="chirp.io.TextFile"/>
+        <Bug pattern="NM_CONFUSING"/>
+    </Match>
+
+    <!--
+      16. UiApp.Builder retains the Parent node so that Ui.show() can attach it
+          to a Scene. A builder is not a value type; storing the reference is
+          the entire purpose of .content(...).
+    -->
+    <Match>
+        <Class name="chirp.ui.UiApp$Builder"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!--
+      17. IMPROPER_UNICODE. Findsecbugs flags every case-mapping call because
+          Unicode case mapping can change string length (ß → SS). None of
+          Chirp's uses are security-sensitive: they compare against ASCII
+          constants, perform case-insensitive search, or normalise user input
+          for display. Every call already pins Locale.ROOT, so results are
+          locale-independent; the length-change concern does not apply. The
+          call sites flagged today are:
+
+            Chirp.start(String[])                switch on lowercased flag
+            Search.contains(String, String)      case-insensitive search
+            Input.readYesNo(String)              match against "y"/"n"
+            Separator.from(Object[])             ASCII key name
+            Http.pingUrl(String)                 scheme → port mapping
+            Capabilities.detectAnsi()            "win" substring check
+            Capabilities.detectTrueColor()       "truecolor"/"24bit" check
+            Text.isPalindrome(String)            case-fold before comparison
+            KeyBindings.parseDescriptor(String)  modifier-name matching
+            KeyBindings.parseKey(String)         key-name matching
+            KeyBindings.parseKey(String)         KeyCode.valueOf input
+    -->
+    <Match>
+        <Bug pattern="IMPROPER_UNICODE"/>
+    </Match>
+
+    <!--
+      18. PREDICTABLE_RANDOM on ThreadLocalRandom. Findsecbugs flags
+          ThreadLocalRandom because it extends java.util.Random; the detector
+          does not reason about "non-cryptographic vs cryptographic" use.
+          Chirp's random helpers are documented as non-cryptographic:
+
+            ArraysUtil.randomMatrix    seed data for exercises
+            Numbers.random/randomDouble/randomBoolean   pick-question helpers
+            Retry backoff jitter        spreads retry timing
+
+          ThreadLocalRandom is the *correct* choice for each — thread-safe,
+          contention-free, fast. A SecureRandom would add latency to every
+          student loop calling Numbers.random(1, 10) without adding any
+          security. Tokens, salts, and session IDs must use SecureRandom
+          directly; the library does none of those.
+    -->
+    <Match>
+        <Bug pattern="PREDICTABLE_RANDOM"/>
+    </Match>
+
+    <!--
+      19. EI_EXPOSE_REP on record accessors. Every flagged record wraps its
+          mutable collections in Collections.unmodifiableList / List.copyOf /
+          a deep-copied unmodifiable map in the canonical constructor, so the
+          returned value is truly immutable and cannot be used to mutate the
+          record. SpotBugs does not reason about unmodifiable wrappers.
+    -->
+    <Match>
+        <Class name="chirp.collection.ArraysUtil$SplitResult"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="chirp.collection.Filter$Split"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="chirp.http.HttpResponse"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="chirp.io.CsvFile$CsvTable"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
+    <!--
+      20. REDOS on Check's email regex. The regex uses possessive quantifiers
+          (++, *+) on every unbounded repetition, so the engine cannot
+          backtrack. Worst-case input is processed in O(n) time —
+          EmailValidationTest.adversarialInputIsRejectedQuickly verifies that
+          a 100,000-character adversarial input is rejected in under 2 s.
+          Findsecbugs does not analyse possessive-quantifier semantics.
+    -->
+    <Match>
+        <Class name="chirp.text.Check"/>
+        <Bug pattern="REDOS"/>
+    </Match>
+
 </FindBugsFilter>

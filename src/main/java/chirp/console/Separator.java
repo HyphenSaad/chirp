@@ -3,6 +3,7 @@ package chirp.console;
 import chirp.internal.Ansi;
 import chirp.internal.Capabilities;
 
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -74,7 +75,7 @@ public final class Separator {
             Object key = keyValuePairs[i];
             Object value = keyValuePairs[i + 1];
             if (key == null) continue;
-            String name = key instanceof Key k ? k.name() : String.valueOf(key).toUpperCase();
+            String name = key instanceof Key k ? k.name() : String.valueOf(key).toUpperCase(Locale.ROOT);
             switch (name) {
                 case "WIDTH" -> {
                     if (value instanceof Integer n) b.width(n);

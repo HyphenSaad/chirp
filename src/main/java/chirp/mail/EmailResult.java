@@ -16,6 +16,10 @@ import java.util.List;
  *
  * <p>The record's field list is stable — <b>no</b> fields are added or removed
  * from earlier versions. New accessors are pure derivations.</p>
+ *
+ * <p>{@code recipients} and {@code smtpLog} are defensive-copied in the
+ * canonical constructor so the caller of {@code send()} cannot mutate the
+ * result by retaining a reference to the lists that were passed in.</p>
  */
 public record EmailResult(
         boolean success,
@@ -24,6 +28,11 @@ public record EmailResult(
         String rawMessage,
         List<String> recipients,
         List<String> smtpLog) {
+
+    public EmailResult {
+        recipients = recipients == null ? List.of() : List.copyOf(recipients);
+        smtpLog = smtpLog == null ? List.of() : List.copyOf(smtpLog);
+    }
 
     // ============================================================== factories
 

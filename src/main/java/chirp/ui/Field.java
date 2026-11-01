@@ -39,7 +39,6 @@ public class Field extends VBox {
 
     private enum Kind { TEXT, PASSWORD, TEXTAREA }
 
-    private final Kind kind;
     private final Label labelLabel = new Label();
     private final Label errorLabel = new Label();
     private final Label counterLabel = new Label();
@@ -96,7 +95,6 @@ public class Field extends VBox {
 
     private Field(Kind kind, String label) {
         super(6);
-        this.kind = kind;
 
         // --- label ---
         if (label != null && !label.isBlank()) {
@@ -178,7 +176,7 @@ public class Field extends VBox {
 
     private void togglePassword() {
         passwordVisible = !passwordVisible;
-        String currentValue = input.getText();   // ← was getText()
+        String currentValue = input.getText();
 
         if (passwordVisible) {
             plainPasswordField.setText(currentValue);

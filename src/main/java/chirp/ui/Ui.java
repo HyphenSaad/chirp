@@ -1,5 +1,7 @@
 package chirp.ui;
 
+import chirp.internal.Trace;
+
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
@@ -25,6 +27,16 @@ import javafx.stage.Stage;
  * <pre>{@code
  * Ui.app(() -> Ui.show("App", root));
  * }</pre>
+ *
+ * <h2>Lifecycle hooks</h2>
+ * <p>{@link #app(Runnable, Runnable)} registers two hooks:</p>
+ * <ul>
+ *   <li>{@code onStart} runs on the JavaFX application thread once the toolkit
+ *       is ready. Typical use: create a scene, call {@code Ui.show(...)}.</li>
+ *   <li>{@code onClose} runs when the JVM shuts down (registered as a
+ *       shutdown hook). Typical use: flush logs, save state. Runs on a
+ *       background thread, not the FX thread.</li>
+ * </ul>
  */
 public final class Ui {
 
@@ -34,23 +46,26 @@ public final class Ui {
 
     /** Starts JavaFX (once) and runs {@code entry} on the FX thread. */
     public static void app(Runnable entry) {
-        launch(entry);
+        launch(entry, null);
     }
-    public static void launch(Runnable entry) { launch(entry, null, null); }
-    public static void start(Runnable entry) { launch(entry); }
-    public static void run(Runnable entry) { launch(entry); }
-    public static void boot(Runnable entry) { launch(entry); }
+    public static void launch(Runnable entry) { launch(entry, null); }
+    public static void start(Runnable entry) { launch(entry, null); }
+    public static void run(Runnable entry) { launch(entry, null); }
+    public static void boot(Runnable entry) { launch(entry, null); }
 
     /** Full entry point with optional onStart / onClose hooks. */
     public static void app(Runnable onStart, Runnable onClose) {
-        launch(onStart, onStart, onClose);
+        launch(onStart, onClose);
     }
 
-    private static void launch(Runnable noop, Runnable onStart, Runnable onClose) {
+    private static void launch(Runnable onStart, Runnable onClose) {
         Runnable wrapped = () -> {
+            if (onStart == null) return;
             try {
-                noop.run();
-            } catch (Throwable t) {
+                onStart.run();
+            } catch (RuntimeException t) {
+                // The user's own startup code threw. Print the stack trace —
+                // it is their application to debug, not the library.
                 t.printStackTrace();
             }
         };
@@ -58,6 +73,15 @@ public final class Ui {
             Platform.startup(wrapped);
         } catch (IllegalStateException alreadyRunning) {
             Platform.runLater(wrapped);
+        }
+        if (onClose != null) {
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                try {
+                    onClose.run();
+                } catch (RuntimeException t) {
+                    t.printStackTrace();
+                }
+            }, "chirp-ui-onclose"));
         }
     }
 
@@ -155,14 +179,18 @@ public final class Ui {
             stage.setOnCloseRequest(e -> {
                 try {
                     app.onClose().run();
-                } catch (Exception ignored) {}
+                } catch (RuntimeException ex) {
+                    Trace.warn("ui", "onClose hook threw: " + ex.getMessage());
+                }
             });
         }
         if (app.onShow() != null) {
             stage.setOnShowing(e -> {
                 try {
                     app.onShow().run();
-                } catch (Exception ignored) {}
+                } catch (RuntimeException ex) {
+                    Trace.warn("ui", "onShow hook threw: " + ex.getMessage());
+                }
             });
         }
         return stage;
@@ -205,7 +233,9 @@ public final class Ui {
             Platform.runLater(() -> { run.run(); latch.countDown(); });
             try {
                 latch.await();
-            } catch (InterruptedException ignored) {}
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
         return result.get();
     }

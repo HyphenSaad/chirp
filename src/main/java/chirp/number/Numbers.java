@@ -9,7 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Numeric helpers — null-safe, never throws for user input.
@@ -38,10 +38,15 @@ import java.util.Random;
  * <pre>{@code
  * int result = Numbers.of(10).add(5).times(2).clamp(0, 20).asInt(); // 20
  * }</pre>
+ *
+ * <h2>Randomness</h2>
+ * <p>{@link #random(int, int)}, {@link #randomDouble(double, double)} and
+ * {@link #randomBoolean()} use {@link ThreadLocalRandom#current()} — fast,
+ * thread-safe, and intended for non-security use cases such as picking a
+ * question index or generating exercise data. They are not a cryptographic
+ * RNG; use {@code java.security.SecureRandom} for tokens, salts, or keys.</p>
  */
 public final class Numbers {
-
-    private static final Random RANDOM = new Random();
 
     private Numbers() {}
 
@@ -54,7 +59,7 @@ public final class Numbers {
 
     public static int random(int min, int max) {
         if (min > max) return min;
-        return RANDOM.nextInt(max - min + 1) + min;
+        return ThreadLocalRandom.current().nextInt(min, max + 1);
     }
     public static int rand(int min, int max) { return random(min, max); }
     public static int randomInt(int min, int max) { return random(min, max); }
@@ -63,12 +68,12 @@ public final class Numbers {
 
     public static double randomDouble(double min, double max) {
         if (min > max) return min;
-        return min + (max - min) * RANDOM.nextDouble();
+        return ThreadLocalRandom.current().nextDouble(min, max);
     }
     public static double randDouble(double min, double max) { return randomDouble(min, max); }
     public static double randomFloat(double min, double max) { return randomDouble(min, max); }
 
-    public static boolean randomBoolean() { return RANDOM.nextBoolean(); }
+    public static boolean randomBoolean() { return ThreadLocalRandom.current().nextBoolean(); }
     public static boolean randomBool() { return randomBoolean(); }
     public static boolean flipCoin() { return randomBoolean(); }
 
@@ -370,21 +375,21 @@ public final class Numbers {
     public static Integer fromBinary(String s) {
         try {
             return Integer.parseInt(s, 2);
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             return null;
         }
     }
     public static Integer fromHex(String s) {
         try {
             return Integer.parseInt(s, 16);
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             return null;
         }
     }
     public static Integer fromOctal(String s) {
         try {
             return Integer.parseInt(s, 8);
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             return null;
         }
     }

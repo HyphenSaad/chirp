@@ -8,6 +8,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.IntPredicate;
 import java.util.function.IntUnaryOperator;
 
@@ -27,6 +28,12 @@ import java.util.function.IntUnaryOperator;
  *
  * <h2>Fluent chains</h2>
  * <p>{@link #of(int[])} opens an {@link ArrayChain} for chaining.</p>
+ *
+ * <h2>Randomness</h2>
+ * <p>{@link #randomMatrix(int, int, int, int)} uses
+ * {@link ThreadLocalRandom#current()} — thread-safe, contention-free, and
+ * intended for non-security use cases (seed data, exercises). It is not a
+ * cryptographic RNG and must not be used for secrets.</p>
  */
 public final class ArraysUtil {
 
@@ -72,12 +79,14 @@ public final class ArraysUtil {
 
     public static int[][] randomMatrix(int rows, int cols, int min, int max) {
         if (rows <= 0 || cols <= 0) return new int[0][0];
-        if (min > max) { int t = min; min = max; max = t; }
+        int lo = min;
+        int hi = max;
+        if (lo > hi) { int t = lo; lo = hi; hi = t; }
         int[][] m = new int[rows][cols];
-        java.util.Random rnd = new java.util.Random();
+        ThreadLocalRandom rnd = ThreadLocalRandom.current();
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
-                m[r][c] = rnd.nextInt(max - min + 1) + min;
+                m[r][c] = rnd.nextInt(lo, hi + 1);
             }
         }
         return m;
@@ -467,8 +476,23 @@ public final class ArraysUtil {
         return new SplitResult<>(matching, nonMatching);
     }
 
-    /** Two-way split — pairs matching/non-matching. */
+    /**
+     * Two-way split — pairs matching/non-matching.
+     *
+     * <p>Both lists are wrapped in {@link Collections#unmodifiableList} in the
+     * canonical constructor so callers get a read-only view of the split and
+     * cannot mutate the record's internals by keeping a reference to the
+     * passed-in lists.</p>
+     */
     public record SplitResult<T>(List<T> matching, List<T> nonMatching) {
+        public SplitResult {
+            matching = matching == null
+                    ? List.of()
+                    : Collections.unmodifiableList(new ArrayList<>(matching));
+            nonMatching = nonMatching == null
+                    ? List.of()
+                    : Collections.unmodifiableList(new ArrayList<>(nonMatching));
+        }
         public List<T> matchingItems() { return matching; }
         public List<T> nonMatchingItems() { return nonMatching; }
     }

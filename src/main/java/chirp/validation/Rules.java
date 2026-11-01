@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,6 +21,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@code get} / {@code find} / {@code lookup} / {@code rule};
  * {@code has} / {@code contains} / {@code exists};
  * {@code pakistaniMobile} / {@code pkMobile} / {@code pkPhone} / {@code pakistanMobile}.</p>
+ *
+ * <h2>Locale</h2>
+ * <p>Rule names are stored uppercase. Lookup and registration normalise with
+ * {@link Locale#ROOT} so a Turkish-locale machine finds {@code "EMAIL"} the
+ * same way every other locale does.</p>
  */
 public final class Rules {
 
@@ -37,7 +43,7 @@ public final class Rules {
     /** Registers (or replaces) a rule. Returns the previous rule, or {@code null}. */
     public static Rule register(Rule rule) {
         if (rule == null || rule.name() == null) return null;
-        Rule previous = REGISTRY.put(rule.name().toUpperCase(), rule);
+        Rule previous = REGISTRY.put(rule.name().toUpperCase(Locale.ROOT), rule);
         Trace.debug("rule", "registered '{}' (previous={})",
                 rule.name(), previous == null ? "none" : "replaced");
         return previous;
@@ -63,7 +69,7 @@ public final class Rules {
     /** Retrieves a rule by name. Returns {@code null} when absent. */
     public static Rule get(String name) {
         if (name == null) return null;
-        Rule rule = REGISTRY.get(name.toUpperCase());
+        Rule rule = REGISTRY.get(name.toUpperCase(Locale.ROOT));
         Trace.trace("rule", "lookup '{}' -> {}", name, rule == null ? "missing" : rule.name());
         return rule;
     }
@@ -83,7 +89,7 @@ public final class Rules {
     public static Rule mustGet(String name) { return require(name); }
 
     public static boolean has(String name) {
-        return name != null && REGISTRY.containsKey(name.toUpperCase());
+        return name != null && REGISTRY.containsKey(name.toUpperCase(Locale.ROOT));
     }
     public static boolean exists(String name) { return has(name); }
     public static boolean contains(String name) { return has(name); }

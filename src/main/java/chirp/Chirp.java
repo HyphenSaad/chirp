@@ -50,6 +50,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -97,7 +98,7 @@ public final class Chirp {
             for (String flag : flags) {
                 if (flag == null)
                     continue;
-                switch (flag.toLowerCase()) {
+                switch (flag.toLowerCase(Locale.ROOT)) {
                     case "noheader", "nobanner", "silent", "quiet" -> builder.noHeader();
                     case "header", "banner" -> builder.withHeader();
                     case "stats" -> builder.withStats();

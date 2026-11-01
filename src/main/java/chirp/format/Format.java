@@ -155,6 +155,10 @@ public final class Format {
                     case STYLE -> {
                         if (v instanceof Style st) useGrouping = st != Style.SHORT;
                     }
+                    default -> {
+                        // WIDTH, PAD_CHAR, ALIGN, PREFIX, SUFFIX are not used for
+                        // currency formatting; reserved for other key-value APIs.
+                    }
                 }
             }
         }
@@ -332,8 +336,8 @@ public final class Format {
 
     public static String title(String value) { return Text.titleCase(value); }
     public static String capitalize(String v) { return Text.capitalize(v); }
-    public static String upper(String v) { return v == null ? null : v.toUpperCase(Locale.ENGLISH); }
-    public static String lower(String v) { return v == null ? null : v.toLowerCase(Locale.ENGLISH); }
+    public static String upper(String v) { return v == null ? null : v.toUpperCase(Locale.ROOT); }
+    public static String lower(String v) { return v == null ? null : v.toLowerCase(Locale.ROOT); }
 
     public static String mask(String value, int visible) { return Text.mask(value, visible); }
     public static String slug(String value) { return Text.slugify(value); }

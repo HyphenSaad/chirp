@@ -5,8 +5,10 @@ import chirp.json.JsonNull;
 import chirp.json.JsonObject;
 import chirp.json.JsonValue;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +25,16 @@ import java.util.Map;
  * {@code header / headerFirst / firstHeader}; {@code headerAll / headers};
  * {@code durationMillis / elapsed / took / timeMs};
  * {@code summary / describe / info}.</p>
+ *
+ * <p><b>Encoding:</b> {@link #byteLength()} encodes with {@link StandardCharsets#UTF_8}
+ * to match the charset used by {@code HttpRequest.send()} when building the
+ * request body. Relying on the platform default would report different lengths
+ * on machines with a non-UTF-8 default charset.</p>
+ *
+ * <p><b>Immutability:</b> the {@code headers} map and its inner lists are
+ * defensively copied in the canonical constructor, so callers cannot mutate
+ * the response by retaining a reference to the map they passed in. Iteration
+ * order is preserved (the JDK's HTTP client uses an insertion-ordered map).</p>
  */
 public record HttpResponse(
         HttpMethod method,
@@ -32,6 +44,19 @@ public record HttpResponse(
         String body,
         Map<String, List<String>> headers,
         Duration duration) {
+
+    public HttpResponse {
+        headers = headers == null ? Map.of() : deepCopy(headers);
+    }
+
+    private static Map<String, List<String>> deepCopy(Map<String, List<String>> headers) {
+        Map<String, List<String>> copy = new LinkedHashMap<>(headers.size());
+        for (Map.Entry<String, List<String>> e : headers.entrySet()) {
+            List<String> values = e.getValue();
+            copy.put(e.getKey(), values == null ? List.of() : List.copyOf(values));
+        }
+        return Collections.unmodifiableMap(copy);
+    }
 
     // ============================================================== factories
 
@@ -85,7 +110,7 @@ public record HttpResponse(
     public boolean hasBody() { return !text().isEmpty(); }
     public boolean notEmpty() { return hasBody(); }
     public int length() { return text().length(); }
-    public int byteLength() { return text().getBytes().length; }
+    public int byteLength() { return text().getBytes(StandardCharsets.UTF_8).length; }
 
     // ============================================================== JSON
 
@@ -93,7 +118,7 @@ public record HttpResponse(
         if (body == null || body.isBlank()) return JsonNull.INSTANCE;
         try {
             return Json.parse(body);
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return JsonNull.INSTANCE;
         }
     }

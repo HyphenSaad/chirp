@@ -5,6 +5,7 @@ import chirp.internal.Trace;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
@@ -26,6 +27,11 @@ import java.util.regex.Pattern;
  * <p>{@link #set(Rule.Key, Object)} lets every builder method be driven from
  * {@link Rule#from(Object...)}. Missing or wrongly-typed values are silently
  * skipped.</p>
+ *
+ * <h2>Locale</h2>
+ * <p>Rule names are stored uppercase, and {@link #oneOfIgnoreCase(String...)}
+ * compares case-insensitively — both use {@link Locale#ROOT} so rule
+ * lookups work the same on every locale.</p>
  */
 public final class RuleBuilder {
 
@@ -40,7 +46,7 @@ public final class RuleBuilder {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Rule name must not be blank");
         }
-        this.name = name.trim().toUpperCase();
+        this.name = name.trim().toUpperCase(Locale.ROOT);
     }
 
     // ============================================================== meta
@@ -84,10 +90,10 @@ public final class RuleBuilder {
     }
     public RuleBuilder strip(String regex) { return stripAll(regex); }
 
-    public RuleBuilder lowerCase() { return normalize(String::toLowerCase); }
+    public RuleBuilder lowerCase() { return normalize(s -> s.toLowerCase(Locale.ROOT)); }
     public RuleBuilder toLower() { return lowerCase(); }
 
-    public RuleBuilder upperCase() { return normalize(String::toUpperCase); }
+    public RuleBuilder upperCase() { return normalize(s -> s.toUpperCase(Locale.ROOT)); }
     public RuleBuilder toUpper() { return upperCase(); }
 
     // ============================================================== predicates
@@ -148,8 +154,10 @@ public final class RuleBuilder {
     public RuleBuilder in(String... options) { return oneOf(options); }
     public RuleBuilder oneOfIgnoreCase(String... options) {
         Objects.requireNonNull(options, "options");
-        List<String> set = Arrays.stream(options).map(String::toLowerCase).toList();
-        predicates.add(v -> set.contains(v.toLowerCase()));
+        List<String> set = Arrays.stream(options)
+                .map(s -> s.toLowerCase(Locale.ROOT))
+                .toList();
+        predicates.add(v -> set.contains(v.toLowerCase(Locale.ROOT)));
         return this;
     }
 

@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,10 +29,6 @@ import java.util.function.Predicate;
  * <p>{@link #table(String)} returns a {@link CsvTable} record with
  * {@code headers} and {@code records} — easier than juggling two return
  * types.</p>
- *
- * <h2>Key-value enum</h2>
- * <p>{@link Key} drives {@link #write(String, List, Object...)} for
- * delimiter and quoting options.</p>
  */
 public final class CsvFile {
 
@@ -39,8 +36,29 @@ public final class CsvFile {
 
     /**
      * A CSV table — headers plus typed records.
+     *
+     * <p>Both fields are defensive-copied in the canonical constructor:
+     * {@code headers} becomes an immutable list, {@code records} becomes an
+     * immutable list of immutable {@link LinkedHashMap}s (order preserved).
+     * Callers can no longer mutate the table by keeping a reference to the
+     * lists/maps they passed to the constructor.</p>
      */
     public record CsvTable(List<String> headers, List<Map<String, String>> records) {
+
+        public CsvTable {
+            headers = headers == null ? List.of() : List.copyOf(headers);
+            if (records == null) {
+                records = List.of();
+            } else {
+                List<Map<String, String>> safe = new ArrayList<>(records.size());
+                for (Map<String, String> row : records) {
+                    safe.add(row == null
+                            ? Map.of()
+                            : Collections.unmodifiableMap(new LinkedHashMap<>(row)));
+                }
+                records = Collections.unmodifiableList(safe);
+            }
+        }
 
         public int rowCount() { return records.size(); }
         public int columnCount() { return headers.size(); }

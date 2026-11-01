@@ -10,6 +10,11 @@ import java.util.function.Predicate;
 
 /**
  * Fluent single-character reader. Uses {@link Input#readRaw(String)} internally.
+ *
+ * <p><b>Strict mode:</b> a single character has no range, length, blank, or
+ * format dimension to be strict about — so this reader never emits strict
+ * warnings. {@link #lenient()} exists purely for API symmetry with the
+ * other readers and is a documented no-op.</p>
  */
 public final class CharReader {
 
@@ -18,7 +23,6 @@ public final class CharReader {
     private String helpText;
     private Predicate<Character> customValidator;
     private String customError;
-    private boolean lenient = false;
 
     private CharReader() {}
     private CharReader(String label) { if (label != null) this.label = label; }
@@ -53,7 +57,11 @@ public final class CharReader {
         return this;
     }
 
-    public CharReader lenient() { this.lenient = true; return this; }
+    /**
+     * No-op — kept for fluent-API symmetry with the other readers.
+     * CharReader never emits strict warnings, so there is nothing to relax.
+     */
+    public CharReader lenient() { return this; }
     public CharReader noStrict() { return lenient(); }
 
     public char read() {

@@ -176,6 +176,10 @@ public final class DateTime {
                     case LOCALE -> {
                         if (v instanceof Locale l) locale = l;
                     }
+                    default -> {
+                        // Other keys (STYLE, REFERENCE, WEEKEND_DAYS, ...) are
+                        // irrelevant for date parsing — ignore them.
+                    }
                 }
             }
         }
@@ -183,7 +187,7 @@ public final class DateTime {
         try {
             return LocalDate.parse(text == null ? "" : text.trim(),
                     DateTimeFormatter.ofPattern(pattern, locale));
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return null;
         }
     }
@@ -306,7 +310,7 @@ public final class DateTime {
         try {
             LocalDate.of(year, month, day);
             return true;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return false;
         }
     }

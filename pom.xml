@@ -32,7 +32,15 @@
     </developers>
 
     <properties>
+        <!--
+            `release` pins the compiler API (Java 17 in this case).
+            `source`/`target` are duplicated here only because maven-javadoc-plugin
+            (3.x) reads them instead of `release` when generating the API docs;
+            leaving them unset would cause javadoc to default to Java 5 source rules.
+        -->
         <maven.compiler.release>17</maven.compiler.release>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.10.0</junit.version>
         <javafx.version>21.0.1</javafx.version>
@@ -225,6 +233,29 @@
                 </executions>
             </plugin>
 
+            <!--
+                Two jars from maven-jar-plugin:
+                  * chirp-1.0.0.jar       — implicit default-jar execution (thin, then replaced by shade below)
+                  * chirp-1.0.0-thin.jar  — explicit thin-jar execution, for Maven consumers who add
+                                            <classifier>thin</classifier> to their dependency
+                The shade plugin below runs after both, so chirp-1.0.0.jar becomes the fat jar while
+                chirp-1.0.0-thin.jar stays thin.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+                <executions>
+                    <execution>
+                        <id>thin-jar</id>
+                        <goals><goal>jar</goal></goals>
+                        <configuration>
+                            <classifier>thin</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
@@ -236,13 +267,30 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <!--
+                Sources sibling. `jar` goal is bound to package phase by default;
+                `attach-javadocs` wires it in during a standard `mvn package` /
+                `mvn verify` / `mvn install`, producing chirp-1.0.0-javadoc.jar.
+                `release` is set explicitly so javadoc uses Java 17 source rules
+                (the plugin reads maven.compiler.source / .target; setting both
+                here keeps the doc build consistent with the compile build).
+            -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
                 <version>3.6.0</version>
                 <configuration>
                     <doclint>none</doclint>
+                    <release>17</release>
+                    <quiet>true</quiet>
                 </configuration>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals><goal>jar</goal></goals>
+                    </execution>
+                </executions>
             </plugin>
 
             <!-- Fat JAR bundling Chirp plus JavaFX for the current platform -->

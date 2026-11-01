@@ -63,7 +63,7 @@ public final class Validate {
     // ============================================================== null / blank
 
     public Validate notBlank(String message) {
-        if (value == null || value.trim().isEmpty()) errors.add(message);
+        if (value == null || value.isBlank()) errors.add(message);
         return this;
     }
     public Validate nonEmpty(String message) { return notBlank(message); }

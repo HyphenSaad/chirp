@@ -6,6 +6,7 @@ import chirp.internal.Trace;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 
 /**
@@ -38,6 +39,12 @@ import java.util.function.Supplier;
  * Exceptions that survive all retries are rethrown unchanged for the caller
  * to handle. Interrupts are re-interrupted and rethrown wrapped in
  * {@link RetryInterruptedException}.</p>
+ *
+ * <h2>Jitter</h2>
+ * <p>Backoff jitter spreads retries across multiple clients so a bad server
+ * does not receive a synchronised retry storm. Jitter uses
+ * {@link ThreadLocalRandom#current()} — it is a timing spread, not a
+ * security primitive.</p>
  */
 public final class Retry {
 
@@ -124,7 +131,19 @@ public final class Retry {
 
     // -------------------------------------------------------------- terminals
 
-    /** Executes a {@code Supplier}, retrying on failure. Returns the last successful value. */
+    /**
+     * Executes a {@code Supplier}, retrying on failure. Returns the last
+     * successful value.
+     *
+     * <p>The {@code catch (Throwable t)} is deliberate and documented in the
+     * class Javadoc: a retry policy must survive {@link Error} (e.g. a
+     * {@code StackOverflowError} thrown by user code under retry) as well
+     * as {@link Exception}, because retrying is the entire purpose of this
+     * method and swallowing an Error would silently lose the retry attempt.
+     * See {@code RetryTest} for the tests that verify non-Exception throws
+     * still surface correctly after all attempts.</p>
+     */
+    @SuppressWarnings("PMD.AvoidCatchingThrowable")
     public <T> T execute(Supplier<T> supplier) {
         if (supplier == null) return null;
         Throwable last = null;
@@ -174,7 +193,7 @@ public final class Retry {
 
         // Jitter: apply ±(jitter * 100)% as a random offset
         if (jitter > 0) {
-            double delta = waitMs * jitter * (Math.random() * 2 - 1);
+            double delta = waitMs * jitter * (ThreadLocalRandom.current().nextDouble() * 2 - 1);
             waitMs = Math.max(0, waitMs + (long) delta);
         }
 

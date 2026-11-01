@@ -1,5 +1,7 @@
 package chirp.text;
 
+import java.util.Locale;
+
 /**
  * Null-safe string utilities.
  *
@@ -11,6 +13,12 @@ package chirp.text;
  * <h2>Null safety</h2>
  * <p>No method throws on {@code null}. Each returns a documented default
  * (usually {@code null}, {@code ""}, {@code 0}, or {@code false}).</p>
+ *
+ * <h2>Locale</h2>
+ * <p>Every case transformation uses {@link Locale#ROOT}. This makes results
+ * identical on a Turkish-locale machine, where {@code "I".toLowerCase()}
+ * produces the dotless {@code "ı"} with the default locale but {@code "i"}
+ * with {@link Locale#ROOT}.</p>
  */
 public final class Text {
 
@@ -27,7 +35,7 @@ public final class Text {
 
     // ============================================================== checks
 
-    public static boolean isBlank(String s) { return s == null || s.trim().isEmpty(); }
+    public static boolean isBlank(String s) { return s == null || s.isBlank(); }
     public static boolean isEmpty(String s) { return s == null || s.isEmpty(); }
     public static boolean isNotBlank(String s) { return !isBlank(s); }
     public static boolean isNotEmpty(String s) { return !isEmpty(s); }
@@ -38,7 +46,8 @@ public final class Text {
     public static String capitalize(String s) {
         if (isBlank(s)) return s;
         String trimmed = s.trim();
-        return Character.toUpperCase(trimmed.charAt(0)) + trimmed.substring(1).toLowerCase();
+        return Character.toUpperCase(trimmed.charAt(0))
+                + trimmed.substring(1).toLowerCase(Locale.ROOT);
     }
     public static String capitalise(String s) { return capitalize(s); }
     public static String toCapitalized(String s) { return capitalize(s); }
@@ -56,7 +65,7 @@ public final class Text {
     public static String toCamelCase(String s) {
         if (isBlank(s)) return s;
         String[] parts = s.trim().split("[\\s_-]+");
-        StringBuilder sb = new StringBuilder(parts[0].toLowerCase());
+        StringBuilder sb = new StringBuilder(parts[0].toLowerCase(Locale.ROOT));
         for (int i = 1; i < parts.length; i++) sb.append(capitalize(parts[i]));
         return sb.toString();
     }
@@ -74,21 +83,21 @@ public final class Text {
 
     public static String toSnakeCase(String s) {
         if (isBlank(s)) return s;
-        return s.trim().replaceAll("[\\s-]+", "_").toLowerCase();
+        return s.trim().replaceAll("[\\s-]+", "_").toLowerCase(Locale.ROOT);
     }
     public static String snakeCase(String s) { return toSnakeCase(s); }
     public static String toUnderscoreCase(String s) { return toSnakeCase(s); }
 
     public static String toKebabCase(String s) {
         if (isBlank(s)) return s;
-        return s.trim().replaceAll("[\\s_]+", "-").toLowerCase();
+        return s.trim().replaceAll("[\\s_]+", "-").toLowerCase(Locale.ROOT);
     }
     public static String kebabCase(String s) { return toKebabCase(s); }
     public static String toDashCase(String s) { return toKebabCase(s); }
 
     public static String toDotCase(String s) {
         if (isBlank(s)) return s;
-        return s.trim().replaceAll("[\\s_-]+", ".").toLowerCase();
+        return s.trim().replaceAll("[\\s_-]+", ".").toLowerCase(Locale.ROOT);
     }
 
     /** Swaps case of every letter — "Hello" → "hELLO". */
@@ -258,15 +267,15 @@ public final class Text {
 
     public static boolean isPalindrome(String s) {
         if (isBlank(s)) return false;
-        String clean = s.toLowerCase().replaceAll("[^a-z0-9]", "");
+        String clean = s.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
         return clean.equals(new StringBuilder(clean).reverse().toString());
     }
 
     /** @return true if the two strings are anagrams (ignoring case and non-letters). */
     public static boolean isAnagram(String a, String b) {
         if (a == null || b == null) return false;
-        String na = a.toLowerCase().replaceAll("[^a-z0-9]", "");
-        String nb = b.toLowerCase().replaceAll("[^a-z0-9]", "");
+        String na = a.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        String nb = b.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
         if (na.length() != nb.length()) return false;
         char[] ca = na.toCharArray();
         char[] cb = nb.toCharArray();
@@ -330,7 +339,7 @@ public final class Text {
 
     public static String slugify(String s) {
         if (isBlank(s)) return "";
-        return s.trim().toLowerCase()
+        return s.trim().toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", "-")
                 .replaceAll("^-+|-+$", "");
     }

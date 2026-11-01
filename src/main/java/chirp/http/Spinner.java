@@ -8,6 +8,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * A tiny terminal spinner. Runs on a daemon thread; writes {@code \r} +
  * frame to {@link System#out} so it overwrites itself. Falls back to ASCII
  * frames when unicode is unavailable.
+ *
+ * <p><b>Synchronization:</b> a private {@link #PRINT_LOCK} object serialises
+ * output between the spinner thread and any other thread that needs to
+ * clear the line. This avoids synchronising on {@code System.out}, whose
+ * monitor is globally visible and exposed to hostile code.</p>
  */
 public final class Spinner {
 
@@ -15,6 +20,9 @@ public final class Spinner {
             "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"
     };
     private static final String[] ASCII_FRAMES = {"|", "/", "-", "\\"};
+
+    /** Private lock — output serialization without exposing {@code System.out}. */
+    private static final Object PRINT_LOCK = new Object();
 
     private final String label;
     private final Thread thread;
@@ -36,7 +44,7 @@ public final class Spinner {
         String[] frames = Capabilities.unicode() ? UNICODE_FRAMES : ASCII_FRAMES;
         int frame = 0;
         while (running.get()) {
-            synchronized (System.out) {
+            synchronized (PRINT_LOCK) {
                 System.out.print("\r" + frames[frame % frames.length] + " " + label);
                 System.out.flush();
             }
@@ -57,7 +65,7 @@ public final class Spinner {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        synchronized (System.out) {
+        synchronized (PRINT_LOCK) {
             System.out.print("\r" + " ".repeat(Math.min(label.length() + 4, 200)) + "\r");
             System.out.flush();
         }
