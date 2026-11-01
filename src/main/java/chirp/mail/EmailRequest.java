@@ -45,6 +45,13 @@ import java.util.UUID;
  * must never break the send. Exceptions from listeners are logged via
  * {@link Trace#warn(String, String)} so they surface when tracing is
  * enabled, and are otherwise ignored.</p>
+ *
+ * <h2>Transport errors</h2>
+ * <p>{@link SmtpClient#send} declares {@code throws IOException}. It is
+ * caught at the call site and rethrown as {@link EmailException} with
+ * {@link EmailException.Reason#TRANSPORT}, so the caller sees a single
+ * failure category regardless of whether the problem was DNS, TLS, or
+ * SMTP-level rejection.</p>
  */
 public final class EmailRequest {
 
@@ -411,6 +418,11 @@ public final class EmailRequest {
 
             try {
                 client.send(from, allRecipients(), rawMessage);
+            } catch (java.io.IOException e) {
+                // SmtpClient declares `throws IOException`; wrap it so the outer
+                // catch chain sees a single EmailException category and the caller
+                // gets a precise TRANSPORT reason.
+                throw EmailException.transport("SMTP transport failed: " + e.getMessage(), e);
             } finally {
                 notifyDisconnect();
             }
