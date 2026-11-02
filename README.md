@@ -1,13 +1,32 @@
-# Chirp 🐦
+<h1 align="center">Chirp 🐦</h1>
 
-**A friendly Java toolkit for developers who want to write less boilerplate and focus on what matters.**
+<p align="center">
+  <em>A friendly Java toolkit for developers who want to write less boilerplate and focus on what matters.</em>
+</p>
 
-[![Java](https://img.shields.io/badge/Java-17%2B-blue?logo=openjdk)](https://openjdk.org/projects/jdk/17/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](CHANGELOG.md)
-[![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/hyphensaad/chirp/actions)
-[![JavaFX](https://img.shields.io/badge/JavaFX-21-purple)](https://openjfx.io/)
-[![Docs](https://img.shields.io/badge/docs-live-brightgreen)](https://hyphensaad.github.io/chirp/)
+<p align="center">
+  <a href="https://github.com/hyphensaad/chirp">
+    <img alt="Library" src="https://img.shields.io/badge/library-chirp-e11d48?style=for-the-badge&logo=java&logoColor=white">
+  </a>
+  <a href="https://hyphensaad.github.io/chirp/">
+    <img alt="Docs" src="https://img.shields.io/badge/docs-api-6366f1?style=for-the-badge&logo=read-the-docs&logoColor=white">
+  </a>
+  <a href="https://github.com/hyphensaad/chirp-examples">
+    <img alt="Examples" src="https://img.shields.io/badge/examples-repo-0ea5e9?style=for-the-badge&logo=github&logoColor=white">
+  </a>
+  <a href="https://github.com/hyphensaad/chirp/issues">
+    <img alt="Issues" src="https://img.shields.io/badge/issues-open-22c55e?style=for-the-badge&logo=github&logoColor=white">
+  </a>
+</p>
+
+<p align="center">
+  <img alt="Java 17+" src="https://img.shields.io/badge/java-17%2B-orange?style=flat-square&logo=openjdk&logoColor=white">
+  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square">
+  <img alt="Version 1.0.0" src="https://img.shields.io/badge/version-1.0.0-6366f1?style=flat-square">
+  <img alt="Build passing" src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square">
+  <img alt="JavaFX 21" src="https://img.shields.io/badge/javafx-21-8b5cf6?style=flat-square">
+  <img alt="Examples 24" src="https://img.shields.io/badge/problems-24-0ea5e9?style=flat-square">
+</p>
 
 Chirp is a zero-boilerplate Java toolkit that replaces the friction of standard Java I/O, arrays, validation, date/time, networking, email, and desktop UI with **fluent, safe, one-line** APIs.
 
@@ -23,6 +42,7 @@ Chirp is a zero-boilerplate Java toolkit that replaces the friction of standard 
 
 - [Why Chirp?](#why-chirp)
 - [Before & after](#before--after)
+- [Learn by example](#learn-by-example)
 - [Features](#features)
 - [Installation](#installation)
 - [Quick start](#quick-start)
@@ -438,6 +458,49 @@ No `Application` subclass. No scene graph assembly. Theme applied automatically.
 
 ---
 
+## Learn by example
+
+The snippets above show single-method comparisons. For **complete, runnable programs** — the kind a student actually writes — see the companion repository:
+
+<p align="center">
+  <a href="https://github.com/hyphensaad/chirp-examples">
+    <img alt="Examples repo" src="https://img.shields.io/badge/examples-repo-e11d48?style=for-the-badge&logo=github&logoColor=white">
+  </a>
+  <a href="https://github.com/hyphensaad/chirp-examples/tree/main/01-first-steps">
+    <img alt="Start at Level 1" src="https://img.shields.io/badge/start-level%201-0ea5e9?style=for-the-badge&logo=java&logoColor=white">
+  </a>
+  <a href="https://github.com/hyphensaad/chirp-examples/tree/main/08-windows-and-widgets">
+    <img alt="Up to Level 8" src="https://img.shields.io/badge/up%20to-level%208%20(GUI)-8b5cf6?style=for-the-badge&logo=javafx&logoColor=white">
+  </a>
+  <a href="https://github.com/hyphensaad/chirp-examples/blob/main/LICENSE">
+    <img alt="MIT License" src="https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge">
+  </a>
+</p>
+
+**[Chirp Examples](https://github.com/hyphensaad/chirp-examples)** — **8 levels × 3 problems**, each solved **twice**:
+
+- **`with-chirp/`** — using Chirp's shortcuts
+- **`without-chirp/`** — using plain Java
+
+Both produce **identical output** for identical input. Read them side by side. The point is not that Chirp makes the impossible possible; the point is that it makes the routine invisible, so the student's attention goes to the actual problem.
+
+Levels 1–7 are console-only. Level 8 introduces JavaFX, where every problem also has **`with-chirp-gui/`** and **`without-chirp-gui/`** variants — the same logic, running in a window instead of a terminal.
+
+| # | Level | What you practice |
+|:-:|:------|:------------------|
+| 1 | [First Steps](https://github.com/hyphensaad/chirp-examples/tree/main/01-first-steps) | Strings, integers, decimals, menus, `if`/`else` |
+| 2 | [Making Decisions](https://github.com/hyphensaad/chirp-examples/tree/main/02-making-decisions) | Chained ranges, independent modifiers, `switch` |
+| 3 | [Loops & Iteration](https://github.com/hyphensaad/chirp-examples/tree/main/03-loops-and-iteration) | Nested `for`, `while` + early exit, accumulators |
+| 4 | [Strings & Collections](https://github.com/hyphensaad/chirp-examples/tree/main/04-strings-and-collections) | `String`, `List`, `Map`, grouping, filtering, sorting |
+| 5 | [Building Classes](https://github.com/hyphensaad/chirp-examples/tree/main/05-building-classes) | Encapsulation, constructors, invariants, state machines |
+| 6 | [Files & Persistence](https://github.com/hyphensaad/chirp-examples/tree/main/06-files-and-persistence) | CSV, JSON, append-only logs, first-run handling |
+| 7 | [Talking to the World](https://github.com/hyphensaad/chirp-examples/tree/main/07-talking-to-the-world) | HTTP, JSON APIs, error handling, retries, email |
+| 8 | [Windows & Widgets](https://github.com/hyphensaad/chirp-examples/tree/main/08-windows-and-widgets) | Layouts, controls, events, live updates |
+
+Every example is a **self-contained single-file program**: no build files, no dependencies beyond the JDK and Chirp. From `readLine()` up to a working JavaFX todo list — clone, compile, run.
+
+---
+
 ## Features
 
 | Module          | What it does                                                               |
@@ -585,6 +648,7 @@ Or jump straight to a section:
 - 📦 [Installation](https://hyphensaad.github.io/chirp/INSTALLATION.html) — detailed setup per platform
 - 📚 [API Reference](https://hyphensaad.github.io/chirp/API_REFERENCE.html) — every class and method
 - 💡 [Examples](https://hyphensaad.github.io/chirp/EXAMPLES.html) — before/after comparisons
+- 🧪 [Examples repo](https://github.com/hyphensaad/chirp-examples) — 24 complete runnable programs
 - 🏗️ [Architecture](https://hyphensaad.github.io/chirp/ARCHITECTURE.html) — how Chirp is designed
 - 🎨 [JavaFX UI Guide](https://hyphensaad.github.io/chirp/JAVAFX_GUIDE.html) — full component catalog
 - ❓ [FAQ](https://hyphensaad.github.io/chirp/FAQ.html) — common questions
