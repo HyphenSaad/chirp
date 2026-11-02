@@ -82,9 +82,22 @@ public class Checkbox extends javafx.scene.control.CheckBox {
      *
      * @param on whether the checkbox is checked
      * @return this checkbox, for chaining
+     * @see #value()
      * @since 1.0.0
      */
     public Checkbox selected(boolean on) { setSelected(on); return this; }
+
+    /**
+     * Returns whether the checkbox is currently checked.
+     *
+     * <p>Mirrors the {@code selected(boolean)} setter — the standard
+     * {@code value()} getter/setter pair used by every Chirp control.</p>
+     *
+     * @return {@code true} if checked, {@code false} otherwise
+     * @see #selected(boolean)
+     * @since 1.0.0
+     */
+    public boolean value() { return isSelected(); }
 
     /**
      * Enables or disables the checkbox.

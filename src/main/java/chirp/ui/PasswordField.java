@@ -17,8 +17,7 @@ import javafx.scene.input.KeyCode;
  * <h2>Show/Hide toggle</h2>
  * <p>This raw {@code PasswordField} does <b>not</b> have a Show/Hide
  * toggle. If you want that UX, use {@link Field#password(String)} — the
- * composite version includes a built-in toggle button. Use
- * {@code PasswordField} only when you need the raw JavaFX behaviour.</p>
+ * composite version includes a built-in toggle button.</p>
  *
  * <h2>Example</h2>
  * <pre>{@code
@@ -77,9 +76,49 @@ public class PasswordField extends javafx.scene.control.PasswordField {
      *
      * @param t the text (null → "")
      * @return this field, for chaining
+     * @see #value()
      * @since 1.0.0
      */
     public PasswordField text(String t) { setText(t == null ? "" : t); return this; }
+
+    /**
+     * Returns the text currently in the field. Never {@code null}.
+     *
+     * <p>Mirrors the {@code text(String)} setter — the standard
+     * {@code value()} getter used by every Chirp text input.</p>
+     *
+     * @return the current text, or {@code ""}
+     * @see #text(String)
+     * @see #onChange(Consumer)
+     * @since 1.0.0
+     */
+    public String value() { return getText() == null ? "" : getText(); }
+
+    /**
+     * Registers a callback that fires every time the text changes — on
+     * every keystroke, paste, or delete.
+     *
+     * @param consumer the callback (may be null — ignored)
+     * @return {@code this} for chaining
+     * @see #value()
+     * @since 1.0.0
+     */
+    public PasswordField onChange(Consumer<String> consumer) {
+        if (consumer != null) {
+            textProperty().addListener((obs, o, n) -> consumer.accept(n == null ? "" : n));
+        }
+        return this;
+    }
+
+    /**
+     * Alias of {@link #onChange(Consumer)}.
+     *
+     * @param c the callback
+     * @return {@code this} for chaining
+     * @see #onChange(Consumer)
+     * @since 1.0.0
+     */
+    public PasswordField onInput(Consumer<String> c) { return onChange(c); }
 
     /**
      * Sets the placeholder (prompt text).

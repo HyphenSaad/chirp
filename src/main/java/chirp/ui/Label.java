@@ -31,11 +31,20 @@ package chirp.ui;
  *     .add(Label.muted("Last updated 2 minutes ago"));
  * }</pre>
  *
- * <h2>No static {@code label()} or {@code text()} factory</h2>
- * <p>{@code label(String)} and {@code text(String)} are the instance
- * setters — {@code Label.of("x").text("y").label("z")} is the pattern.
- * There is no {@code Label.label(...)} static factory to avoid
- * ambiguity with the setters.</p>
+ * <h2>Variant replacement vs. stacking</h2>
+ * <p>The known variants are {@code heading}, {@code subheading},
+ * {@code muted}, {@code error}, and {@code success}. Calling
+ * {@link #variant(String)} with one of these <b>replaces</b> the
+ * previous one, so a state transition like muted → error leaves only
+ * {@code error} applied. For the rare case where you want to
+ * <em>add</em> a variant without removing the existing one, use
+ * {@link #addVariant(String)}.</p>
+ *
+ * <h2>Style merging</h2>
+ * <p>{@link #bold()}, {@link #italic()}, {@link #fontSize(double)},
+ * and {@link #color(String)} merge into the label's inline style
+ * rather than overwriting it. {@code label.bold().color("#dc2626")}
+ * produces both bold and red, in either order.</p>
  *
  * <h2>Related</h2>
  * <p>For editable text input, see {@link TextField}. For a hyperlink
@@ -48,6 +57,11 @@ package chirp.ui;
  * @since 1.0.0
  */
 public class Label extends javafx.scene.control.Label {
+
+    /** The variant classes that {@link #variant(String)} replaces. */
+    private static final String[] KNOWN_VARIANTS = {
+            "heading", "subheading", "muted", "error", "success"
+    };
 
     private Label(String text) { super(text == null ? "" : text); }
 
@@ -291,15 +305,23 @@ public class Label extends javafx.scene.control.Label {
     // ============================================================== instance — variant
 
     /**
-     * Adds a CSS class for the given variant. Usually the variants are
-     * applied via the static factories, but this method is available
-     * for custom variants.
+     * Sets the label's variant class, replacing any existing known
+     * variant. The known variants are: {@code heading},
+     * {@code subheading}, {@code muted}, {@code error}, {@code success}.
      *
-     * @param v the variant class name (null or blank → no-op)
+     * <p>Calling {@code variant("success")} after {@code variant("error")}
+     * removes {@code error} before adding {@code success} — the label
+     * does <b>not</b> end up with both classes.</p>
+     *
+     * @param v the variant class name (null or blank → clears all known
+     * variants but adds nothing)
      * @return this label
+     * @see #addVariant(String)
+     * @see #style(String)
      * @since 1.0.0
      */
     public Label variant(String v) {
+        for (String known : KNOWN_VARIANTS) getStyleClass().remove(known);
         if (v != null && !v.isBlank()) getStyleClass().add(v);
         return this;
     }
@@ -326,19 +348,34 @@ public class Label extends javafx.scene.control.Label {
      */
     public Label kind(String v) { return variant(v); }
 
+    /**
+     * Adds a variant class <b>without</b> removing the existing one.
+     * Use this only when you explicitly want to combine variants — for
+     * example, a heading that is also an error.
+     *
+     * @param v the class to add (null or blank → ignored)
+     * @return this label
+     * @see #variant(String)
+     * @since 1.0.0
+     */
+    public Label addVariant(String v) {
+        if (v != null && !v.isBlank() && !getStyleClass().contains(v)) {
+            getStyleClass().add(v);
+        }
+        return this;
+    }
+
     // ============================================================== instance — typography
 
     /**
-     * Applies bold font weight via inline CSS.
+     * Applies bold font weight via inline CSS. Merges with any existing
+     * inline style.
      *
      * @return this label
      * @see #strong()
      * @since 1.0.0
      */
-    public Label bold() {
-        setStyle("-fx-font-weight: bold;");
-        return this;
-    }
+    public Label bold() { return addStyle("-fx-font-weight", "bold"); }
 
     /**
      * Alias of {@link #bold()} — see that method for full
@@ -351,16 +388,14 @@ public class Label extends javafx.scene.control.Label {
     public Label strong() { return bold(); }
 
     /**
-     * Applies italic font style via inline CSS.
+     * Applies italic font style via inline CSS. Merges with any existing
+     * inline style.
      *
      * @return this label
      * @see #emph()
      * @since 1.0.0
      */
-    public Label italic() {
-        setStyle("-fx-font-style: italic;");
-        return this;
-    }
+    public Label italic() { return addStyle("-fx-font-style", "italic"); }
 
     /**
      * Alias of {@link #italic()} — see that method for full
@@ -407,7 +442,8 @@ public class Label extends javafx.scene.control.Label {
     public Label wrapping() { return wrap(); }
 
     /**
-     * Sets the font size via inline CSS.
+     * Sets the font size via inline CSS. Merges with any existing inline
+     * style.
      *
      * @param size the font size in pixels
      * @return this label
@@ -415,10 +451,7 @@ public class Label extends javafx.scene.control.Label {
      * @see #font(double)
      * @since 1.0.0
      */
-    public Label fontSize(double size) {
-        setStyle("-fx-font-size: " + size + "px;");
-        return this;
-    }
+    public Label fontSize(double size) { return addStyle("-fx-font-size", size + "px"); }
 
     /**
      * Alias of {@link #fontSize(double)} — see that method for full
@@ -445,7 +478,8 @@ public class Label extends javafx.scene.control.Label {
     // ============================================================== instance — colour
 
     /**
-     * Sets the text colour via inline CSS.
+     * Sets the text colour via inline CSS. Merges with any existing
+     * inline style.
      *
      * @param hex the hex colour (e.g. {@code "#ff0000"})
      * @return this label
@@ -453,7 +487,7 @@ public class Label extends javafx.scene.control.Label {
      * @since 1.0.0
      */
     public Label color(String hex) {
-        if (hex != null && !hex.isBlank()) setStyle("-fx-text-fill: " + hex + ";");
+        if (hex != null && !hex.isBlank()) addStyle("-fx-text-fill", hex);
         return this;
     }
 
@@ -509,4 +543,30 @@ public class Label extends javafx.scene.control.Label {
      * @since 1.0.0
      */
     public boolean isSuccess() { return getStyleClass().contains("success"); }
+
+    // ============================================================== internal — style merging
+
+    /**
+     * Adds or replaces one inline style rule, preserving the rest. This
+     * is what lets {@code bold().color(...)} produce both bold and
+     * colour instead of one overwriting the other.
+     */
+    private Label addStyle(String property, String value) {
+        java.util.Map<String, String> rules = new java.util.LinkedHashMap<>();
+        String current = getStyle() == null ? "" : getStyle();
+        for (String rule : current.split(";")) {
+            rule = rule.trim();
+            if (rule.isEmpty()) continue;
+            int colon = rule.indexOf(':');
+            if (colon > 0) {
+                rules.put(rule.substring(0, colon).trim(),
+                        rule.substring(colon + 1).trim());
+            }
+        }
+        rules.put(property, value);
+        StringBuilder sb = new StringBuilder();
+        rules.forEach((k, v) -> sb.append(k).append(": ").append(v).append("; "));
+        setStyle(sb.toString().trim());
+        return this;
+    }
 }

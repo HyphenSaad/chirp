@@ -83,9 +83,59 @@ public class TextArea extends javafx.scene.control.TextArea {
      *
      * @param t the text (null → "")
      * @return this text area, for chaining
+     * @see #value()
      * @since 1.0.0
      */
     public TextArea text(String t) { setText(t == null ? "" : t); return this; }
+
+    /**
+     * Returns the text currently in the area. Never {@code null}.
+     *
+     * <p>Mirrors the {@code text(String)} setter — the standard
+     * {@code value()} getter used by every Chirp text input.</p>
+     *
+     * @return the current text, or {@code ""}
+     * @see #text(String)
+     * @see #onChange(Consumer)
+     * @since 1.0.0
+     */
+    public String value() { return getText() == null ? "" : getText(); }
+
+    /**
+     * Registers a callback that fires every time the text changes — on
+     * every keystroke, paste, or delete.
+     *
+     * @param consumer the callback (may be null — ignored)
+     * @return {@code this} for chaining
+     * @see #value()
+     * @since 1.0.0
+     */
+    public TextArea onChange(Consumer<String> consumer) {
+        if (consumer != null) {
+            textProperty().addListener((obs, o, n) -> consumer.accept(n == null ? "" : n));
+        }
+        return this;
+    }
+
+    /**
+     * Alias of {@link #onChange(Consumer)}.
+     *
+     * @param c the callback
+     * @return {@code this} for chaining
+     * @see #onChange(Consumer)
+     * @since 1.0.0
+     */
+    public TextArea onInput(Consumer<String> c) { return onChange(c); }
+
+    /**
+     * Alias of {@link #onChange(Consumer)}.
+     *
+     * @param c the callback
+     * @return {@code this} for chaining
+     * @see #onChange(Consumer)
+     * @since 1.0.0
+     */
+    public TextArea onEdit(Consumer<String> c) { return onChange(c); }
 
     /**
      * Sets the placeholder.

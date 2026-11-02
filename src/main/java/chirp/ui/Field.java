@@ -1,5 +1,7 @@
 package chirp.ui;
 
+import java.util.OptionalDouble;
+import java.util.OptionalInt;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import javafx.geometry.Insets;
@@ -48,6 +50,21 @@ import javafx.scene.layout.VBox;
  *     .hint("At least 8 characters");
  * }</pre>
  *
+ * <h2>Reading the value</h2>
+ * <p>The input is text — {@link #value()} returns the current string.
+ * For numeric fields, use one of the typed getters:</p>
+ * <ul>
+ *   <li><b>{@link #intValue()}</b> / <b>{@link #doubleValue()}</b> — throw
+ *       {@link NumberFormatException} when the current text is not
+ *       parseable. Use after {@link #isValid()} returned {@code true}.</li>
+ *   <li><b>{@link #intValueOr(int)}</b> / <b>{@link #doubleValueOr(double)}</b>
+ *       — return a fallback when parsing fails.</li>
+ *   <li><b>{@link #optionalIntValue()}</b> /
+ *       <b>{@link #optionalDoubleValue()}</b> — return
+ *       {@link OptionalInt} / {@link OptionalDouble}. Use when "no value"
+ *       is a legitimate state.</li>
+ * </ul>
+ *
  * <h2>What validation does</h2>
  * <p>Every field can carry a validator — a predicate that decides
  * whether the current value is valid. When the user types:</p>
@@ -60,39 +77,12 @@ import javafx.scene.layout.VBox;
  *       (visible only when {@code minLength} or {@code maxLength} is
  *       set)</li>
  * </ul>
- * <p>{@link #isValid()} returns the current state at any point.
- * {@link #error()} returns the current error message (or null).</p>
- *
- * <h2>Composing with validation</h2>
- * <p>Fields validate their value against a fixed predicate. For dynamic
- * per-submit validation — a form where all fields are checked at once —
- * use {@link FormBuilder}, which orchestrates fields and their
- * validation.</p>
- * <pre>{@code
- * FormBuilder.create("Register")
- *     .field("name",  Field.of("Name").required().minLength(3))
- *     .field("email", Field.of("Email").email())
- *     .submit("Register", values -> { /* ... *\/ })
- *     .build();
- * }</pre>
- *
- * <h2>Built-in validators</h2>
- * <ul>
- *   <li>{@link #required()}, {@link #minLength(int)}, {@link #maxLength(int)},
- *       {@link #lengthBetween(int, int)}</li>
- *   <li>{@link #email()}, {@link #phone()}, {@link #url()}, {@link #numeric()}</li>
- *   <li>{@link #validate(Predicate, String)} — custom predicate</li>
- *   <li>{@link #validate(chirp.validation.Rule)} — a {@link chirp.validation.Rule}
- *       object</li>
- *   <li>{@link #validate(String)} — a rule from the registry by name</li>
- * </ul>
  *
  * <h2>Related</h2>
  * <p>For raw single-line inputs without the composite wrapper, see
  * {@link TextField}. For raw masked inputs, see {@link PasswordField}.
  * For the form that orchestrates multiple fields, see
- * {@link FormBuilder}. For the validation system that fields use, see
- * {@link chirp.validation.Rule} and {@link chirp.validation.Rules}.</p>
+ * {@link FormBuilder}.</p>
  *
  * @see TextField
  * @see PasswordField
@@ -172,8 +162,7 @@ public class Field extends VBox {
     /**
      * Creates a masked password field with the given label and a
      * built-in Show/Hide toggle button. Clicking the button reveals the
-     * password in plain text — this is the standard UX for a password
-     * field and saves the caller from wiring it manually.
+     * password in plain text.
      *
      * @param label the label text (null → no label)
      * @return a new password field
@@ -379,6 +368,8 @@ public class Field extends VBox {
      *
      * @return this field, for chaining
      * @see chirp.text.Check#isNumeric(String)
+     * @see #intValue()
+     * @see #doubleValue()
      * @since 1.0.0
      */
     public Field numeric() {
@@ -440,11 +431,7 @@ public class Field extends VBox {
      *
      * <p>Each call to {@code validate} <b>replaces</b> the previous
      * validator — a field has exactly one active validator at a time.
-     * To combine, use a composite predicate:</p>
-     * <pre>{@code
-     * field.validate(s -> s.length() >= 3 && s.matches("[a-z]+"),
-     *     "At least 3 lowercase letters");
-     * }</pre>
+     * To combine, use a composite predicate.</p>
      *
      * @param predicate the validator predicate
      * @param message the error message shown on failure
@@ -695,6 +682,108 @@ public class Field extends VBox {
         input.setText(v == null ? "" : v);
         if (plainPasswordField != null) plainPasswordField.setText(v == null ? "" : v);
         return this;
+    }
+
+    /**
+     * Parses the current text as an {@code int}.
+     *
+     * <p>Throws {@link NumberFormatException} when the text is not a
+     * valid integer — empty field, letters, or mid-typing state. Only
+     * call this when you already know the value parses (typically right
+     * after {@link #isValid()} returned {@code true}).</p>
+     *
+     * @return the parsed integer
+     * @throws NumberFormatException if the text is not a valid integer
+     * @see #intValueOr(int)
+     * @see #optionalIntValue()
+     * @see #doubleValue()
+     * @since 1.0.0
+     */
+    public int intValue() { return Integer.parseInt(value().trim()); }
+
+    /**
+     * Parses the current text as a {@code double}.
+     *
+     * <p>Throws {@link NumberFormatException} when the text is not a
+     * valid number.</p>
+     *
+     * @return the parsed double
+     * @throws NumberFormatException if the text is not a valid number
+     * @see #doubleValueOr(double)
+     * @see #optionalDoubleValue()
+     * @see #intValue()
+     * @since 1.0.0
+     */
+    public double doubleValue() { return Double.parseDouble(value().trim()); }
+
+    /**
+     * Parses the current text as an {@code int}, returning {@code
+     * fallback} on failure.
+     *
+     * @param fallback the value to return when parsing fails
+     * @return the parsed integer, or {@code fallback}
+     * @see #intValue()
+     * @see #optionalIntValue()
+     * @since 1.0.0
+     */
+    public int intValueOr(int fallback) {
+        try {
+            return Integer.parseInt(value().trim());
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    /**
+     * Parses the current text as a {@code double}, returning {@code
+     * fallback} on failure.
+     *
+     * @param fallback the value to return when parsing fails
+     * @return the parsed double, or {@code fallback}
+     * @see #doubleValue()
+     * @see #optionalDoubleValue()
+     * @since 1.0.0
+     */
+    public double doubleValueOr(double fallback) {
+        try {
+            return Double.parseDouble(value().trim());
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    /**
+     * Parses the current text as an {@code int}, returning an empty
+     * {@link OptionalInt} when parsing fails.
+     *
+     * @return the parsed integer, or {@link OptionalInt#empty()}
+     * @see #intValue()
+     * @see #intValueOr(int)
+     * @since 1.0.0
+     */
+    public OptionalInt optionalIntValue() {
+        try {
+            return OptionalInt.of(Integer.parseInt(value().trim()));
+        } catch (NumberFormatException e) {
+            return OptionalInt.empty();
+        }
+    }
+
+    /**
+     * Parses the current text as a {@code double}, returning an empty
+     * {@link OptionalDouble} when parsing fails.
+     *
+     * @return the parsed double, or {@link OptionalDouble#empty()}
+     * @see #doubleValue()
+     * @see #doubleValueOr(double)
+     * @since 1.0.0
+     */
+    public OptionalDouble optionalDoubleValue() {
+        try {
+            return OptionalDouble.of(Double.parseDouble(value().trim()));
+        } catch (NumberFormatException e) {
+            return OptionalDouble.empty();
+        }
     }
 
     /**

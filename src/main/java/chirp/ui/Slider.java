@@ -17,17 +17,9 @@ import java.util.function.Consumer;
  *     .onChange(v -> setVolume(v));
  * }</pre>
  *
- * <h2>Value range</h2>
- * <p>{@link #of()} creates a slider with the range {@code [0, 100]} and
- * an initial value of {@code 50} — a sensible default for volume,
- * opacity, and other percentage-like controls. For a custom range, use
- * {@link #of(double, double, double)} or call
- * {@link #range(double, double)}.</p>
- *
  * <h2>Related</h2>
  * <p>For numeric input with typed entry and increment buttons, see
- * {@link Spinner}. For discrete numeric selection with a bounded count,
- * see {@link Spinner}.</p>
+ * {@link Spinner}.</p>
  *
  * @see Spinner
  * @since 1.0.0
@@ -74,9 +66,22 @@ public class Slider extends javafx.scene.control.Slider {
      *
      * @param v the new value
      * @return this slider, for chaining
+     * @see #value()
      * @since 1.0.0
      */
     public Slider value(double v) { setValue(v); return this; }
+
+    /**
+     * Returns the current value.
+     *
+     * <p>Mirrors the {@code value(double)} setter — the standard
+     * {@code value()} getter/setter pair used by every Chirp control.</p>
+     *
+     * @return the current value
+     * @see #value(double)
+     * @since 1.0.0
+     */
+    public double value() { return getValue(); }
 
     /**
      * Enables or disables tick marks — the small dots or dashes along

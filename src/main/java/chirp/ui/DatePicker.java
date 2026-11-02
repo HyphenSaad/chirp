@@ -18,14 +18,6 @@ import java.util.function.Consumer;
  *     .onChange(d -> System.out.println("Selected: " + d));
  * }</pre>
  *
- * <h2>Date format</h2>
- * <p>The displayed format is controlled by JavaFX's
- * {@code converter} property, which this wrapper does not override.
- * The default format matches the system locale — {@code M/d/yyyy} in
- * the US, {@code dd/MM/yyyy} in the UK, and so on. Call
- * {@code setConverter(...)} on the underlying control for a custom
- * format.</p>
- *
  * <h2>Related</h2>
  * <p>For time selection, see {@link TimePicker}. For date/time input
  * via text (with format flexibility), see
@@ -62,9 +54,22 @@ public class DatePicker extends javafx.scene.control.DatePicker {
      *
      * @param d the date (null → clears the selection)
      * @return this picker, for chaining
+     * @see #value()
      * @since 1.0.0
      */
     public DatePicker value(LocalDate d) { setValue(d); return this; }
+
+    /**
+     * Returns the currently selected date.
+     *
+     * <p>Mirrors the {@code value(LocalDate)} setter — the standard
+     * {@code value()} getter/setter pair used by every Chirp control.</p>
+     *
+     * @return the selected date, or {@code null} when no date is chosen
+     * @see #value(LocalDate)
+     * @since 1.0.0
+     */
+    public LocalDate value() { return getValue(); }
 
     /**
      * Sets the placeholder text.

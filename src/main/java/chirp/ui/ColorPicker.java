@@ -19,10 +19,7 @@ import javafx.scene.paint.Color;
  * <h2>The hex helper</h2>
  * <p>JavaFX's {@code Color} does not have a public {@code toHex()}
  * method. {@link #toHex(Color)} formats the red, green, and blue
- * components as {@code #rrggbb}, matching CSS hex notation. This is
- * what makes the picker useful for live re-styling — the picked colour
- * can be handed straight to {@link UiStyle#apply(Object...)} or set on
- * a CSS class.</p>
+ * components as {@code #rrggbb}, matching CSS hex notation.</p>
  *
  * <h2>Related</h2>
  * <p>For theme-level colour configuration, see {@link UiStyle}. For
@@ -60,9 +57,22 @@ public class ColorPicker extends javafx.scene.control.ColorPicker {
      *
      * @param c the colour (null → no-op)
      * @return this picker, for chaining
+     * @see #value()
      * @since 1.0.0
      */
     public ColorPicker value(Color c) { setValue(c); return this; }
+
+    /**
+     * Returns the currently selected colour.
+     *
+     * <p>Mirrors the {@code value(Color)} setter — the standard
+     * {@code value()} getter/setter pair used by every Chirp control.</p>
+     *
+     * @return the selected colour, or {@code null} when none is chosen
+     * @see #value(Color)
+     * @since 1.0.0
+     */
+    public Color value() { return getValue(); }
 
     /**
      * Registers a listener for colour changes.
@@ -83,8 +93,7 @@ public class ColorPicker extends javafx.scene.control.ColorPicker {
      * {@code "#6366f1"}.
      *
      * <p>The alpha channel is dropped — the standard {@code #rrggbb}
-     * format does not include it. If you need alpha, format it manually
-     * with {@code String.format("#%02x%02x%02x%02x", ...)}.</p>
+     * format does not include it.</p>
      *
      * @param c the colour (null → {@code "#000000"})
      * @return the hex string

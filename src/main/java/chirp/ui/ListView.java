@@ -18,8 +18,7 @@ import javafx.collections.FXCollections;
  * <h2>Height</h2>
  * <p>{@link #height(double)} sets both the preferred and minimum height,
  * so the list is respected even when its parent (a VBox) tries to
- * shrink it. Without the minimum, a VBox will collapse the list to fit
- * other children.</p>
+ * shrink it.</p>
  *
  * <h2>Related</h2>
  * <p>For a table with columns, see {@link Table}. For a hierarchical
@@ -74,6 +73,19 @@ public class ListView extends javafx.scene.control.ListView<String> {
         if (item != null) getItems().add(item);
         return this;
     }
+
+    /**
+     * Returns the currently selected item, or {@code null}.
+     *
+     * <p>The standard {@code value()} getter for this control. Mirrors
+     * the selection model — read it directly instead of going through
+     * {@code getSelectionModel().getSelectedItem()}.</p>
+     *
+     * @return the selected item, or {@code null} when nothing is selected
+     * @see #onChange(Consumer)
+     * @since 1.0.0
+     */
+    public String value() { return getSelectionModel().getSelectedItem(); }
 
     /**
      * Sets the list height — both preferred and minimum.
