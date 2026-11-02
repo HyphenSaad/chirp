@@ -1677,6 +1677,10 @@ public final class Chirp {
     public static boolean isInteger(String s) { return Check.isInteger(s); }
     /** @see Check#isAlpha(String) */
     public static boolean isAlpha(String s) { return Check.isAlpha(s); }
+    /** @see Check#isName(String) */
+    public static boolean isName(String s) { return Check.isName(s); }
+    /** @see Check#isPersonName(String) */
+    public static boolean isPersonName(String s) { return Check.isPersonName(s); }
     /** @see Check#isDigits(String) */
     public static boolean isDigits(String s) { return Check.isDigits(s); }
     /** @see Check#isAlphanumeric(String) */
@@ -1798,6 +1802,8 @@ public final class Chirp {
     public static Rule registerRule(Rule rule) { return Rules.register(rule); }
     /** @see Rules#has(String) */
     public static boolean hasRule(String name) { return Rules.has(name); }
+    /** @see Rules#name() */
+    public static Rule nameRule() { return Rules.name(); }
     /** @see Rules#pakistaniMobile() */
     public static Rule pkMobile() { return Rules.pakistaniMobile(); }
     /** @see Rules#pakistaniCnic() */

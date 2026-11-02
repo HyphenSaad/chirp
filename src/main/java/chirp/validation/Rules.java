@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * name — {@link #get(String)} returns the {@link Rule}, and
  * {@link #test(String, String)} answers the one-shot "does this value
  * pass this rule" question. The registry is populated at class-load time
- * with a full set of common rules ({@code EMAIL}, {@code URL},
+ * with a full set of common rules ({@code EMAIL}, {@code NAME}, {@code URL},
  * {@code USERNAME}, all the Pakistani formats, and so on).</p>
  *
  * <h2>What this class covers</h2>
@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *       {@link #has(String)}, {@link #names()}, {@link #reset()}</li>
  *   <li><b>One-shot testing</b> — {@link #test(String, String)},
  *       {@link #is(String, String)}</li>
- *   <li><b>Built-in shortcuts</b> — {@link #email()},
+ *   <li><b>Built-in shortcuts</b> — {@link #email()}, {@link #name()},
  *       {@link #pakistaniMobile()}, {@link #pakistaniCnic()},
  *       {@link #username()}, {@link #url()}, {@link #strongPassword()},
  *       {@link #uuid()}, {@link #hexColor()}</li>
@@ -41,6 +41,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <caption>Ready-to-use rules registered at startup</caption>
  *   <tr><th>Registry name</th><th>What it validates</th></tr>
  *   <tr><td>{@code EMAIL}</td><td>Standard email syntax (RFC 5322 subset)</td></tr>
+ *   <tr><td>{@code NAME}</td><td>Person name (Unicode, spaces/hyphens/apostrophes)</td></tr>
  *   <tr><td>{@code PHONE_INTL}</td><td>International phone (7–15 digits, optional +)</td></tr>
  *   <tr><td>{@code USERNAME}</td><td>3–20 letters/digits/underscore</td></tr>
  *   <tr><td>{@code STRONG_PASSWORD}</td><td>8+ chars with upper/lower/digit</td></tr>
@@ -76,6 +77,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * lookup, so {@code Rules.get("pk_mobile")},
  * {@code Rules.get("PK_MOBILE")}, and
  * {@code Rules.get("Pk_Mobile")} all return the same rule.</p>
+ *
+ * <h2>Normalization</h2>
+ * <p>Rules that describe a value with well-known formatting
+ * ({@code EMAIL}, {@code NAME}, {@code PK_CNIC}, {@code PK_MOBILE}) carry
+ * normalizers that trim or strip separators before applying the pattern.
+ * This makes them more forgiving than the raw pattern exposed by
+ * {@link Regex} — {@code Rules.name().test("  Saad  ")} returns
+ * {@code true}, whereas {@code Check.isName("  Saad  ")} returns
+ * {@code false} because {@code Check} uses the raw pattern without
+ * trimming.</p>
  *
  * <h2>Thread safety</h2>
  * <p>Backed by a {@link java.util.concurrent.ConcurrentHashMap}, so
@@ -469,6 +480,49 @@ public final class Rules {
      * @since 1.0.0
      */
     public static Rule emailRule() { return require("EMAIL"); }
+
+    /**
+     * Returns the built-in {@code NAME} rule — a Unicode-aware person-name
+     * check equivalent to {@link Check#isName(String)}, plus a
+     * {@code .trim()} normalizer so surrounding whitespace is accepted.
+     *
+     * <pre>{@code
+     * Rules.name().test("Saad");         // true
+     * Rules.name().test("Saad Mansoor"); // true
+     * Rules.name().test("O'Brien");      // true
+     * Rules.name().test("  Saad  ");     // true  (trim)
+     * Rules.name().test("Saad123");      // false (digit)
+     * Rules.name().test("Saad  M");      // false (double space)
+     * }</pre>
+     *
+     * @return the {@code NAME} rule (never null)
+     * @see #personName()
+     * @see #nameRule()
+     * @see Check#isName(String)
+     * @see Regex#name()
+     * @since 1.0.0
+     */
+    public static Rule name() { return require("NAME"); }
+
+    /**
+     * Alias of {@link #name()} — see that method for full
+     * documentation and examples.
+     *
+     * @return the {@code NAME} rule
+     * @see #name()
+     * @since 1.0.0
+     */
+    public static Rule personName() { return require("NAME"); }
+
+    /**
+     * Alias of {@link #name()} — see that method for full
+     * documentation and examples.
+     *
+     * @return the {@code NAME} rule
+     * @see #name()
+     * @since 1.0.0
+     */
+    public static Rule nameRule() { return require("NAME"); }
 
     /**
      * Returns the built-in {@code PHONE_INTL} rule.
@@ -928,6 +982,13 @@ public final class Rules {
                 .trim()
                 .matches(Regex.email())
                 .message("Enter a valid email address.")
+                .build());
+
+        register(Rule.define("NAME")
+                .description("Person name")
+                .trim()
+                .matches(Regex.name())
+                .message("Enter a valid name (letters, spaces, hyphens, apostrophes only).")
                 .build());
 
         register(Rule.define("PHONE_INTL")

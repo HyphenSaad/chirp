@@ -49,7 +49,6 @@ public class JavaFxTestExtension implements BeforeAllCallback, AfterAllCallback,
 
     private static final Object LOCK = new Object();
     private static volatile boolean toolkitStarted = false;
-    private static volatile boolean shutdownHookInstalled = false;
 
     // ------------------------------------------------------------ start toolkit
 

@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
  *       {@link #isUUID(String)}, {@link #isUsername(String)},
  *       {@link #isHexColor(String)}, {@link #isNumeric(String)},
  *       {@link #isInteger(String)}, {@link #isJSON(String)},
- *       {@link #isDate(String, String)}</li>
+ *       {@link #isDate(String, String)}, {@link #isName(String)}</li>
  *   <li><b>Content</b> — {@link #containsDigit(String)}, {@link #containsLetter(String)},
  *       {@link #containsSpecialChar(String)}, {@link #startsWithDigit(String)},
  *       {@link #endsWithDigit(String)}</li>
@@ -54,7 +54,7 @@ import java.util.regex.Pattern;
  *     System.out.println("Password meets requirements");
  * }
  *
- * if (!Check.isBlank(name) && Check.minLength(name, 2)) {
+ * if (!Check.isBlank(name) && Check.isName(name)) {
  *     System.out.println("Hello, " + name);
  * }
  * }</pre>
@@ -74,6 +74,14 @@ import java.util.regex.Pattern;
  * simple, anchored, and safe for typical inputs. For untrusted input
  * larger than ~10 KB, prefer {@link Rule} with a composed rule, which
  * also enforces length limits before regex evaluation.</p>
+ *
+ * <h2>Note on {@code isName} vs {@code isAlpha}</h2>
+ * <p>{@link #isAlpha(String)} is the ASCII-only check — it rejects
+ * {@code "Saad Mansoor"}, {@code "O'Brien"}, and {@code "Müller"}.
+ * {@link #isName(String)} is the Unicode-aware person-name check that
+ * accepts all of those. Use {@code isAlpha} only when the input really is
+ * a single word of English letters; use {@code isName} for anything a
+ * human would type into a name field.</p>
  *
  * @see Rule
  * @see Rules
@@ -110,6 +118,36 @@ public final class Check {
             + EMAIL_TLD + "\\z";
     private static final Pattern EMAIL = Pattern.compile(EMAIL_REGEX);
 
+    /*
+     * Person-name syntax — the single source of truth for isName, the NAME
+     * rule, and Regex.name().
+     *
+     * Structure: WORD ( SPACE WORD )*
+     *
+     * where WORD = LETTERS ( [.'\-] LETTERS )* '.'?
+     *
+     *   - LETTERS is one or more \p{L} or \p{M} characters
+     *   - [.'\-] joins letter groups inside a word ("O'Brien",
+     *     "Al-Rashid", "Mary-Jane", "J.R.R.") — never with spaces around it
+     *   - An optional trailing '.' allows initials: "J.", "Jr."
+     *
+     * The pattern requires:
+     *   - the name to START with a letter (no leading punctuation/space)
+     *   - the name to END with a letter, an optional period, or nothing
+     *     (no trailing spaces, hyphens, or apostrophes)
+     *   - exactly ONE space between words ("Saad  Mansoor" is rejected)
+     *
+     * Handles the real-world name shapes:
+     *   Saad, Saad Mansoor, O'Brien, Al-Rashid, Mary-Jane Watson,
+     *   J. R. R. Tolkien, J.R.R. Tolkien, O'Brien-Smith, van der Berg
+     *
+     * Rejects the malformed shapes:
+     *   Saad123, Saad!, "Saad  Mansoor", -Saad, Saad-, O'-Brien, "  Saad"
+     */
+    private static final String NAME_REGEX = "^[\\p{L}\\p{M}]+(?:[.'\\-][\\p{L}\\p{M}]+)*\\.?"
+            + "(?: [\\p{L}\\p{M}]+(?:[.'\\-][\\p{L}\\p{M}]+)*\\.?)*$";
+    private static final Pattern NAME = Pattern.compile(NAME_REGEX);
+
     private Check() {}
 
     /**
@@ -123,6 +161,18 @@ public final class Check {
      * @since 1.0.0
      */
     static String emailPattern() { return EMAIL_REGEX; }
+
+    /**
+     * The name regex shared with {@link Regex#name()} and the
+     * {@code NAME} rule. Package-private for the same reason as
+     * {@link #emailPattern()}.
+     *
+     * @return the name regex as a string
+     * @see #isName(String)
+     * @see Regex#name()
+     * @since 1.0.0
+     */
+    static String namePattern() { return NAME_REGEX; }
 
     // ============================================================== null / blank
 
@@ -358,6 +408,70 @@ public final class Check {
      * @since 1.0.0
      */
     public static boolean validPhone(String s) { return isPhone(s); }
+
+    /**
+     * Checks whether the given string is a plausible <b>person name</b>.
+     *
+     * <p>This is the Unicode-aware alternative to {@link #isAlpha(String)}.
+     * It accepts letters from any script — Latin, Arabic, Cyrillic, CJK,
+     * Devanagari — plus the punctuation that appears in real names:
+     * single spaces, hyphens, apostrophes, and periods. Digits are
+     * rejected. The name must start and end with a letter.</p>
+     *
+     * <h3>What is accepted</h3>
+     * <pre>{@code
+     * Check.isName("Saad");                     // true
+     * Check.isName("Saad Mansoor");             // true
+     * Check.isName("O'Brien");                  // true
+     * Check.isName("Al-Rashid");                // true
+     * Check.isName("J. R. R. Tolkien");         // true
+     * Check.isName("Müller");                   // true — Latin diacritic
+     * Check.isName("李明");                     // true — CJK
+     * Check.isName("Иван");                     // true — Cyrillic
+     * Check.isName("अनिल");                     // true — Devanagari
+     * Check.isName("Mary-Jane Watson");         // true
+     * Check.isName("van der Berg");             // true
+     * }</pre>
+     *
+     * <h3>What is rejected</h3>
+     * <pre>{@code
+     * Check.isName("Saad123");                  // false — digit
+     * Check.isName("Saad!");                    // false — punctuation
+     * Check.isName("  Saad");                   // false — leading space
+     * Check.isName("Saad  Mansoor");            // false — double space
+     * Check.isName("-Saad");                    // false — leading hyphen
+     * Check.isName("");                         // false — empty
+     * Check.isName(null);                       // false — null
+     * }</pre>
+     *
+     * <p><b>Note on strictness.</b> Like {@link #isEmail(String)}, this
+     * method does not trim its input — {@code "  Saad  "} is rejected. If
+     * you want leading/trailing whitespace trimmed before validation,
+     * use {@link chirp.validation.Rules#name()} — the {@code NAME} rule
+     * includes a {@code .trim()} normalizer and accepts
+     * {@code "  Saad  "}.</p>
+     *
+     * @param s the string to test (may be null)
+     * @return {@code true} if {@code s} is a plausible name;
+     * {@code false} otherwise
+     * @see #isPersonName(String)
+     * @see #isAlpha(String)
+     * @see Regex#name()
+     * @see Rules#name()
+     * @since 1.0.0
+     */
+    public static boolean isName(String s) { return s != null && NAME.matcher(s).matches(); }
+
+    /**
+     * Alias of {@link #isName(String)} — see that method for full
+     * documentation, examples, and the strictness note.
+     *
+     * @param s the string to test (may be null)
+     * @return {@code true} if {@code s} is a plausible name
+     * @see #isName(String)
+     * @since 1.0.0
+     */
+    public static boolean isPersonName(String s) { return isName(s); }
 
     /**
      * Checks whether the given string contains only ASCII letters

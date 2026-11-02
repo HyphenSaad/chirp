@@ -1,7 +1,6 @@
 package chirp.ui;
 
 import javafx.collections.FXCollections;
-import javafx.scene.chart.PieChart.Data;
 
 /**
  * Simple pie chart.

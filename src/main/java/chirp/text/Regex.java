@@ -138,6 +138,35 @@ public final class Regex {
      */
     public static String username() { return "^[A-Za-z0-9_]{3,20}$"; }
 
+    /**
+     * Matches a plausible <b>person name</b>.
+     *
+     * <p>Anchored. Accepts letters from any Unicode script
+     * ({@code \p{L}}), combining marks ({@code \p{M}} — the vowel signs
+     * and diacritics used in Devanagari, Thai, Arabic, and other scripts),
+     * and the punctuation that appears in real names: single spaces,
+     * hyphens, apostrophes, and periods. Digits are rejected.</p>
+     *
+     * <p>Same pattern as {@link Check#isName(String)} and the
+     * {@code NAME} rule. Note that the raw pattern does <b>not</b> trim
+     * surrounding whitespace — the {@code NAME} rule adds a
+     * {@code .trim()} normalizer that does.</p>
+     *
+     * <p><b>Matches:</b> {@code "Saad"}, {@code "Saad Mansoor"},
+     * {@code "O'Brien"}, {@code "Al-Rashid"}, {@code "J. R. R. Tolkien"},
+     * {@code "Müller"}, {@code "李明"}<br>
+     * <b>Rejects:</b> {@code "Saad123"}, {@code "  Saad"},
+     * {@code "Saad  Mansoor"} (double space), {@code "-Saad"}</p>
+     *
+     * @return the regex string
+     * @see Check#isName(String)
+     * @see chirp.validation.Rules#name()
+     * @since 1.0.0
+     */
+    public static String name() {
+        return Check.namePattern();
+    }
+
     // ------------------------------------------------------------ contact
 
     /**

@@ -1,6 +1,8 @@
 package chirp.session;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -49,6 +51,19 @@ import java.util.Map;
  * {@link #instance()}) because different students reach for different
  * names. They all return the same instance.</p>
  *
+ * <h2>Completeness</h2>
+ * <p>{@link #isComplete()} reports whether the three <b>required</b>
+ * fields — name, roll number, and degree — are set. Batch, section,
+ * and email remain optional. Use it at the start of a demo to check the
+ * student has filled in their identity before a report needs it:</p>
+ *
+ * <pre>{@code
+ * if (!Session.me().isComplete()) {
+ *     Console.warn("Set your Session fields: "
+ *         + String.join(", ", Session.me().missingFields()));
+ * }
+ * }</pre>
+ *
  * <h2>Clearing</h2>
  * <p>{@link #clear()} resets every field to null. Useful when running
  * multiple independent sessions in the same JVM (e.g. in tests).</p>
@@ -58,9 +73,10 @@ import java.util.Map;
  * {@link chirp.console.Console#watermark()} and
  * {@link chirp.format.Format#fmtWithSession(String)}.</p>
  *
+ * @see #isComplete()
+ * @see #missingFields()
  * @see chirp.console.Console#watermark()
  * @see chirp.format.Format#fmtWithSession(String)
- * @see chirp.mail.EmailRequest#signatureFromSession()
  * @since 1.0.0
  */
 public final class Session {
@@ -563,12 +579,6 @@ public final class Session {
         return sb.toString();
     }
 
-    private static void appendIfPresent(StringBuilder sb, String label, String value) {
-        if (value != null && !value.isBlank()) {
-            sb.append(label).append(": ").append(value).append('\n');
-        }
-    }
-
     /**
      * Prints the summary to {@code System.out}. Convenience for
      * {@code System.out.print(summary())}.
@@ -603,10 +613,6 @@ public final class Session {
         return map;
     }
 
-    private static void putIfPresent(Map<String, String> map, String key, String value) {
-        if (value != null && !value.isBlank()) map.put(key, value);
-    }
-
     /**
      * Resets every field to null. Useful when running multiple
      * independent sessions in the same JVM (e.g. in tests).
@@ -622,5 +628,111 @@ public final class Session {
         degree = null;
         section = null;
         email = null;
+    }
+
+    // ============================================================ completeness
+
+    /**
+     * Checks whether the required fields are set.
+     *
+     * <p>A session is <b>complete</b> when <b>name</b>, <b>roll number</b>,
+     * and <b>degree</b> are all non-null and non-blank. Batch, section,
+     * and email are optional and do not affect completeness.</p>
+     *
+     * <p>Use this at the start of a demo to detect a session that has not
+     * yet been filled in. {@link #missingFields()} tells you exactly
+     * which fields the user still has to set.</p>
+     *
+     * <pre>{@code
+     * Session.me().name("Saad").rollNumber("2024-CS-001").degree("BSAI");
+     * if (Session.me().isComplete()) {
+     *     Console.success("Ready — your details will be in the report.");
+     * } else {
+     *     Console.warn("Set: " + Session.me().missingFields());
+     * }
+     * }</pre>
+     *
+     * @return {@code true} when name, roll number, and degree are all set;
+     * {@code false} otherwise (including when any of them is blank or
+     * null)
+     * @see #missingFields()
+     * @see #isReady()
+     * @see #hasProfile()
+     * @since 1.0.0
+     */
+    public boolean isComplete() {
+        return isSet(name) && isSet(rollNumber) && isSet(degree);
+    }
+
+    /**
+     * Alias of {@link #isComplete()} — see that method for full
+     * documentation and examples.
+     *
+     * @return {@code true} when name, roll number, and degree are all set
+     * @see #isComplete()
+     * @since 1.0.0
+     */
+    public boolean isReady() { return isComplete(); }
+
+    /**
+     * Alias of {@link #isComplete()} — see that method for full
+     * documentation and examples.
+     *
+     * @return {@code true} when name, roll number, and degree are all set
+     * @see #isComplete()
+     * @since 1.0.0
+     */
+    public boolean hasProfile() { return isComplete(); }
+
+    /**
+     * Returns the names of the required fields that are not yet set.
+     *
+     * <p>The returned list is empty when {@link #isComplete()} is
+     * {@code true}. The order is fixed — {@code "name"},
+     * {@code "rollNumber"}, {@code "degree"} — matching the same order
+     * the setters appear in the class. The field names are exactly the
+     * names of the setters, so a caller can turn them into a hint like
+     * {@code "call .rollNumber(...) and .degree(...)"}.</p>
+     *
+     * <pre>{@code
+     * List<String> missing = Session.me().missingFields();
+     * if (!missing.isEmpty()) {
+     *     Console.warn("Please set your Session " + missing + " first.");
+     * }
+     * }</pre>
+     *
+     * @return the missing field names in fixed order — never {@code null},
+     * and unmodifiable
+     * @see #isComplete()
+     * @since 1.0.0
+     */
+    public List<String> missingFields() {
+        List<String> missing = new ArrayList<>(3);
+        if (!isSet(name)) missing.add("name");
+        if (!isSet(rollNumber)) missing.add("rollNumber");
+        if (!isSet(degree)) missing.add("degree");
+        return List.copyOf(missing);
+    }
+
+    // ------------------------------------------------------------ helpers
+
+    /**
+     * A field counts as "set" when it is non-null and contains at least one
+     * non-whitespace character. Used by {@link #isComplete()},
+     * {@link #missingFields()}, and the summary/map renderers so all four
+     * agree on what "set" means.
+     */
+    private static boolean isSet(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private static void appendIfPresent(StringBuilder sb, String label, String value) {
+        if (isSet(value)) {
+            sb.append(label).append(": ").append(value).append('\n');
+        }
+    }
+
+    private static void putIfPresent(Map<String, String> map, String key, String value) {
+        if (isSet(value)) map.put(key, value);
     }
 }
